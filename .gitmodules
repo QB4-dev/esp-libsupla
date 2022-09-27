@@ -1,0 +1,3 @@
+[submodule "libsupla"]
+	path = libsupla
+	url = https://github.com/QB4-dev/libsupla
