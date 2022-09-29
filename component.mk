@@ -24,3 +24,5 @@ COMPONENT_OBJS += libsupla/src/supla-action-trigger.o
 
 CFLAGS += -DSUPLA_DEVICE
 
+COMPONENT_SRCDIRS += esp-supla-utils
+COMPONENT_OBJS += esp-supla-utils/esp-supla-utils.o
