@@ -9,6 +9,7 @@
 
 #include <libsupla/device.h>
 #include <tcpip_adapter.h>
+#include <esp_http_server.h>
 #include <esp_err.h>
 
 /**
@@ -25,6 +26,10 @@ esp_err_t supla_esp_nvs_config_init(struct supla_config *supla_conf);
  * @return ESP_OK on success
  */
 esp_err_t supla_esp_nvs_config_erase(void);
+
+
+//TODO documentation
+esp_err_t supla_config_httpd_handler(httpd_req_t *req);
 
 /**
  * @brief generate SUPLA device hostname from device name and last two bytes

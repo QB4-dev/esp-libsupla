@@ -11,9 +11,10 @@
 
 #include <esp_system.h>
 #include <esp_log.h>
-#include <esp_wifi.h>
 #include <nvs_flash.h>
 #include <esp_netif.h>
+#include <esp_wifi.h>
+#include <cJSON.h>
 #include <mdns.h>
 
 static const char *TAG = "SUPLA-ESP";
@@ -72,6 +73,12 @@ esp_err_t supla_esp_nvs_config_init(struct supla_config *supla_conf)
 			ESP_LOGE(TAG, "nvs open error %s",esp_err_to_name(rc));
 		}
 	}
+	if(!supla_conf->port)
+		supla_conf->port = supla_conf->ssl ? 2016 : 2015;
+
+	if(!supla_conf->activity_timeout)
+		supla_conf->activity_timeout = 120;
+
 	return ESP_OK;
 }
 
@@ -88,6 +95,65 @@ esp_err_t supla_esp_nvs_config_erase(void)
 	}
 	return rc;
 }
+
+static char *bin2hex(char *hex, const char *bin, size_t len)
+{
+	int adv = 0;
+
+	if(!bin || !hex)
+	  return hex;
+
+	hex[0] = 0;
+	for(int i = 0; i < len; i++) {
+		snprintf(&hex[adv], 3, "%02X", (unsigned char)bin[i]);
+		adv += 2;
+	}
+	return hex;
+}
+
+esp_err_t supla_config_httpd_handler(httpd_req_t *req)
+{
+	cJSON *js = NULL;
+	cJSON *js_data = NULL;
+	cJSON *js_errors = NULL;
+	cJSON *js_err = NULL;
+	char *js_txt;
+	char guid_hex[SUPLA_GUID_HEXSIZE];
+
+	struct supla_config *supla_conf = req->user_ctx;
+
+	js = cJSON_CreateObject();
+	if(!js)
+		return ESP_FAIL;
+
+	if(supla_conf){
+		js_data = cJSON_CreateObject();
+		cJSON_AddStringToObject(js_data,"email",supla_conf->email);
+		cJSON_AddStringToObject(js_data,"server",supla_conf->server);
+		cJSON_AddStringToObject(js_data,"guid",bin2hex(guid_hex,supla_conf->guid,sizeof(supla_conf->guid)));
+		cJSON_AddBoolToObject(js_data,"ssl",supla_conf->ssl);
+		cJSON_AddNumberToObject(js_data,"port",supla_conf->port);
+		cJSON_AddNumberToObject(js_data,"activity_timeout",supla_conf->activity_timeout);
+		cJSON_AddItemToObject(js,"data",js_data);
+		printf("port=%d\n",supla_conf->port);
+	} else {
+		js_errors = cJSON_CreateArray();
+		js_err =  cJSON_CreateObject();
+		cJSON_AddItemToObject(js_err,"title",cJSON_CreateString("SUPLA config not found"));
+		cJSON_AddItemToArray(js_errors,js_err);
+		cJSON_AddItemToObject(js,"errors",js_errors);
+	}
+
+	js_txt = cJSON_Print(js);
+	cJSON_Delete(js);
+
+	httpd_resp_set_type(req,HTTPD_TYPE_JSON);
+	httpd_resp_send(req, js_txt, -1);
+	free(js_txt);
+	return ESP_OK;
+}
+
+
 
 esp_err_t supla_esp_generate_hostname(supla_dev_t *dev, char* buf, size_t len)
 {
