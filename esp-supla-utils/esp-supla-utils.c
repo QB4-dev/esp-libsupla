@@ -14,7 +14,6 @@
 #include <esp_wifi.h>
 #include <nvs_flash.h>
 #include <esp_netif.h>
-#include <tcpip_adapter.h>
 #include <mdns.h>
 
 static const char *TAG = "SUPLA-ESP";
@@ -93,9 +92,14 @@ esp_err_t supla_esp_nvs_config_erase(void)
 esp_err_t supla_esp_generate_hostname(supla_dev_t *dev, char* buf, size_t len)
 {
 	uint8_t mac[6];
-	const char *dev_name = supla_dev_get_name(dev);
+	const char *dev_name;
 
-	ESP_ERROR_CHECK(esp_efuse_mac_get_default(mac));
+	if(!dev)
+		return ESP_ERR_INVALID_ARG;
+
+	dev_name = supla_dev_get_name(dev);
+
+	esp_efuse_mac_get_default(mac);
 	if(strlen(dev_name) + 18 > len)
 		return ESP_ERR_INVALID_SIZE;
 
@@ -103,27 +107,48 @@ esp_err_t supla_esp_generate_hostname(supla_dev_t *dev, char* buf, size_t len)
 	return ESP_OK;
 }
 
-//esp_err_t supla_esp_set_device_hostname(supla_dev_t *dev, tcpip_adapter_if_t tcpip_if)
-//{
-//	char hostname[TCPIP_HOSTNAME_MAX_SIZE];
-//	ESP_ERROR_CHECK(supla_esp_generate_hostname(dev,hostname,sizeof(hostname)));
-//	ESP_ERROR_CHECK(tcpip_adapter_set_hostname(tcpip_if,hostname));
-//	ESP_LOGI(TAG, "device hostname: %s",hostname);
-//	return ESP_OK;
-//}
+esp_err_t supla_esp_set_hostname(supla_dev_t *dev, tcpip_adapter_if_t tcpip_if)
+{
+	char hostname[TCPIP_HOSTNAME_MAX_SIZE];
+	esp_err_t rc;
+
+	if(!dev)
+		return ESP_ERR_INVALID_ARG;
+
+	rc = supla_esp_generate_hostname(dev,hostname,sizeof(hostname));
+	if(rc != ESP_OK)
+		return rc;
+
+	rc = tcpip_adapter_set_hostname(tcpip_if,hostname);
+	if(rc != ESP_OK)
+		return rc;
+
+	ESP_LOGI(TAG, "device hostname set: %s",hostname);
+	return ESP_OK;
+}
 
 
 esp_err_t supla_esp_init_mdns(supla_dev_t *dev)
 {
 #if ENABLE_MDNS == y
 	char mdns_name[SUPLA_DEVICE_NAME_MAXSIZE+16];
+	esp_err_t rc;
 
 	if(!dev)
 		return ESP_ERR_INVALID_ARG;
 
-	ESP_ERROR_CHECK(mdns_init());
-	ESP_ERROR_CHECK(supla_esp_generate_hostname(dev,mdns_name,sizeof(mdns_name)));
-	ESP_ERROR_CHECK(mdns_hostname_set(mdns_name));
+	rc = mdns_init();
+	if(rc != ESP_OK)
+		return rc;
+
+	rc = supla_esp_generate_hostname(dev,mdns_name,sizeof(mdns_name));
+	if(rc != ESP_OK)
+		return rc;
+
+	rc = mdns_hostname_set(mdns_name);
+	if(rc != ESP_OK)
+		return rc;
+
 	ESP_LOGI(TAG, "mdns hostname: %s",mdns_name);
 	return ESP_OK;
 #else
@@ -134,7 +159,7 @@ esp_err_t supla_esp_init_mdns(supla_dev_t *dev)
 
 
 
-int supla_esp_get_wifi_state(TDSC_ChannelState *state)
+esp_err_t supla_esp_get_wifi_state(supla_dev_t *dev, TDSC_ChannelState *state)
 {
 	tcpip_adapter_ip_info_t ip_info = {0};
 	wifi_ap_record_t wifi_info = {0};
@@ -159,7 +184,7 @@ int supla_esp_get_wifi_state(TDSC_ChannelState *state)
 		state->Fields |= SUPLA_CHANNELSTATE_FIELD_IPV4;
 		state->IPv4 = ip_info.ip.addr;
 	}
-	return 0;
+	return ESP_OK;
 }
 
 int supla_esp_server_time_sync(supla_dev_t *dev, TSDC_UserLocalTimeResult *lt)
