@@ -20,6 +20,15 @@
 static const char *TAG = "SUPLA-ESP";
 static const char *NVS_STORAGE = "supla_nvs";
 
+static char* btox(char *hex, const char *bb, int len) 
+{
+    const char xx[]= "0123456789ABCDEF";
+    for(int i=len; i >= 0; --i) 
+	hex[i] = xx[(bb[i>>1] >> ((1 - (i&1)) << 2)) & 0x0F];
+    hex[len]=0x00;
+    return hex;
+}
+
 esp_err_t supla_esp_nvs_config_init(struct supla_config *supla_conf)
 {
 	size_t required_size;
@@ -96,21 +105,6 @@ esp_err_t supla_esp_nvs_config_erase(void)
 	return rc;
 }
 
-static char *bin2hex(char *hex, const char *bin, size_t len)
-{
-	int adv = 0;
-
-	if(!bin || !hex)
-	  return hex;
-
-	hex[0] = 0;
-	for(int i = 0; i < len; i++) {
-		snprintf(&hex[adv], 3, "%02X", (unsigned char)bin[i]);
-		adv += 2;
-	}
-	return hex;
-}
-
 esp_err_t supla_config_httpd_handler(httpd_req_t *req)
 {
 	cJSON *js = NULL;
@@ -130,12 +124,11 @@ esp_err_t supla_config_httpd_handler(httpd_req_t *req)
 		js_data = cJSON_CreateObject();
 		cJSON_AddStringToObject(js_data,"email",supla_conf->email);
 		cJSON_AddStringToObject(js_data,"server",supla_conf->server);
-		cJSON_AddStringToObject(js_data,"guid",bin2hex(guid_hex,supla_conf->guid,sizeof(supla_conf->guid)));
+		cJSON_AddStringToObject(js_data,"guid",btox(guid_hex,supla_conf->guid,sizeof(supla_conf->guid)));
 		cJSON_AddBoolToObject(js_data,"ssl",supla_conf->ssl);
 		cJSON_AddNumberToObject(js_data,"port",supla_conf->port);
 		cJSON_AddNumberToObject(js_data,"activity_timeout",supla_conf->activity_timeout);
 		cJSON_AddItemToObject(js,"data",js_data);
-		printf("port=%d\n",supla_conf->port);
 	} else {
 		js_errors = cJSON_CreateArray();
 		js_err =  cJSON_CreateObject();
