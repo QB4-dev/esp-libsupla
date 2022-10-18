@@ -148,7 +148,7 @@ esp_err_t supla_config_httpd_handler(httpd_req_t *req)
 
 
 
-esp_err_t supla_esp_generate_hostname(supla_dev_t *dev, char* buf, size_t len)
+esp_err_t supla_esp_generate_hostname(const supla_dev_t *dev, char* buf, size_t len)
 {
 	uint8_t mac[6];
 	const char *dev_name;
@@ -159,14 +159,14 @@ esp_err_t supla_esp_generate_hostname(supla_dev_t *dev, char* buf, size_t len)
 	dev_name = supla_dev_get_name(dev);
 
 	esp_efuse_mac_get_default(mac);
-	if(strlen(dev_name) + 18 > len)
+	if(strlen(dev_name) + 5 > len)
 		return ESP_ERR_INVALID_SIZE;
 
 	snprintf(buf,len,"%s-%02X%02X",dev_name,mac[4],mac[5]);
 	return ESP_OK;
 }
 
-esp_err_t supla_esp_set_hostname(supla_dev_t *dev, tcpip_adapter_if_t tcpip_if)
+esp_err_t supla_esp_set_hostname(const supla_dev_t *dev, tcpip_adapter_if_t tcpip_if)
 {
 	char hostname[TCPIP_HOSTNAME_MAX_SIZE];
 	esp_err_t rc;
@@ -187,7 +187,7 @@ esp_err_t supla_esp_set_hostname(supla_dev_t *dev, tcpip_adapter_if_t tcpip_if)
 }
 
 
-esp_err_t supla_esp_init_mdns(supla_dev_t *dev)
+esp_err_t supla_esp_init_mdns(const supla_dev_t *dev)
 {
 #if ENABLE_MDNS == y
 	char mdns_name[SUPLA_DEVICE_NAME_MAXSIZE+16];
