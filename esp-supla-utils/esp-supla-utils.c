@@ -8,9 +8,11 @@
 
 #include <time.h>
 #include <string.h>
+#include <sys/param.h>
 
 #include <esp_system.h>
 #include <esp_log.h>
+#include <esp_err.h>
 #include <nvs_flash.h>
 #include <esp_netif.h>
 #include <esp_wifi.h>
@@ -22,11 +24,45 @@ static const char *NVS_STORAGE = "supla_nvs";
 
 static char* btox(char *hex, const char *bb, int len) 
 {
-    const char xx[]= "0123456789ABCDEF";
-    for(int i=len; i >= 0; --i) 
+	const char xx[]= "0123456789ABCDEF";
+	for(int i=len; i >= 0; --i)
 	hex[i] = xx[(bb[i>>1] >> ((1 - (i&1)) << 2)) & 0x0F];
-    hex[len]=0x00;
-    return hex;
+	hex[len]=0x00;
+	return hex;
+}
+
+static cJSON *supla_config_to_json(struct supla_config *supla_conf)
+{
+	char guid_hex[SUPLA_GUID_HEXSIZE];
+	cJSON *js;
+
+	js = cJSON_CreateObject();
+	cJSON_AddStringToObject(js,"email",supla_conf->email);
+	cJSON_AddStringToObject(js,"server",supla_conf->server);
+	cJSON_AddStringToObject(js,"guid",btox(guid_hex,supla_conf->guid,sizeof(supla_conf->guid)));
+	cJSON_AddBoolToObject(js,"ssl",supla_conf->ssl);
+	cJSON_AddNumberToObject(js,"port",supla_conf->port);
+	cJSON_AddNumberToObject(js,"activity_timeout",supla_conf->activity_timeout);
+	return js;
+}
+
+static cJSON *json_error(int code, const char *title)
+{
+	cJSON* js_err = cJSON_CreateObject();
+	cJSON_AddNumberToObject(js_err,"code",code);
+	cJSON_AddItemToObject(js_err,"title",cJSON_CreateString(title));
+	return js_err;
+}
+
+static esp_err_t send_json_response(cJSON *js, httpd_req_t *req)
+{
+	char *js_txt = cJSON_Print(js);
+	cJSON_Delete(js);
+
+	httpd_resp_set_type(req,HTTPD_TYPE_JSON);
+	httpd_resp_send(req, js_txt, -1);
+	free(js_txt);
+	return ESP_OK;
 }
 
 esp_err_t supla_esp_nvs_config_init(struct supla_config *supla_conf)
@@ -59,7 +95,7 @@ esp_err_t supla_esp_nvs_config_init(struct supla_config *supla_conf)
 		if(rc == ESP_OK){
 			esp_fill_random(supla_conf->auth_key,SUPLA_AUTHKEY_SIZE);
 			ESP_LOGI(TAG, "generated AUTHKEY");
-			//ESP_LOG_BUFFER_HEX(TAG,supla_conf->auth_key,SUPLA_AUTHKEY_SIZE);
+			ESP_LOG_BUFFER_HEX(TAG,supla_conf->auth_key,SUPLA_AUTHKEY_SIZE);
 			nvs_set_blob(nvs,"auth_key",supla_conf->auth_key,SUPLA_AUTHKEY_SIZE);
 			nvs_commit(nvs);
 			nvs_close(nvs);
@@ -74,12 +110,13 @@ esp_err_t supla_esp_nvs_config_init(struct supla_config *supla_conf)
 		if(rc == ESP_OK){
 			esp_fill_random(supla_conf->guid,SUPLA_GUID_SIZE);
 			ESP_LOGI(TAG, "generated GUID");
-			//ESP_LOG_BUFFER_HEX(TAG,supla_conf->guid,SUPLA_GUID_SIZE);
+			ESP_LOG_BUFFER_HEX(TAG,supla_conf->guid,SUPLA_GUID_SIZE);
 			nvs_set_blob(nvs,"guid",supla_conf->guid,SUPLA_GUID_SIZE);
 			nvs_commit(nvs);
 			nvs_close(nvs);
 		}else{
 			ESP_LOGE(TAG, "nvs open error %s",esp_err_to_name(rc));
+			return rc;
 		}
 	}
 	if(!supla_conf->port)
@@ -88,6 +125,29 @@ esp_err_t supla_esp_nvs_config_init(struct supla_config *supla_conf)
 	if(!supla_conf->activity_timeout)
 		supla_conf->activity_timeout = 120;
 
+	return ESP_OK;
+}
+
+esp_err_t supla_esp_nvs_config_write(struct supla_config *supla_conf)
+{
+	nvs_handle nvs;
+	esp_err_t rc;
+
+	rc = nvs_open(NVS_STORAGE,NVS_READWRITE,&nvs);
+	if(rc == ESP_OK){
+		nvs_set_str(nvs,"email",supla_conf->email);
+		nvs_set_blob(nvs,"auth_key",supla_conf->auth_key,SUPLA_AUTHKEY_SIZE);
+		nvs_set_blob(nvs,"guid",supla_conf->guid,SUPLA_GUID_SIZE);
+		nvs_set_str(nvs,"server",supla_conf->server);
+		nvs_set_i8(nvs,"ssl",supla_conf->ssl);
+		nvs_set_i32(nvs,"port",supla_conf->port);
+		nvs_set_i32(nvs,"activity_timeout",supla_conf->activity_timeout);
+		nvs_commit(nvs);
+		nvs_close(nvs);
+	} else {
+		ESP_LOGW(TAG, "nvs open error %s",esp_err_to_name(rc));
+		return rc;
+	}
 	return ESP_OK;
 }
 
@@ -107,45 +167,93 @@ esp_err_t supla_esp_nvs_config_erase(void)
 
 esp_err_t supla_config_httpd_handler(httpd_req_t *req)
 {
-	cJSON *js = NULL;
-	cJSON *js_data = NULL;
-	cJSON *js_errors = NULL;
-	cJSON *js_err = NULL;
-	char *js_txt;
-	char guid_hex[SUPLA_GUID_HEXSIZE];
+	cJSON *js, *js_data, *js_errors;
+	char *url_query;
+	size_t qlen;
+	char *req_data;
+	char value[128];
+	char save_config = 0;
+	int bytes_recv = 0;
+	int rc;
 
-	struct supla_config *supla_conf = req->user_ctx;
+	struct supla_config *supla_config = req->user_ctx;
 
-	js = cJSON_CreateObject();
-	if(!js)
-		return ESP_FAIL;
-
-	if(supla_conf){
-		js_data = cJSON_CreateObject();
-		cJSON_AddStringToObject(js_data,"email",supla_conf->email);
-		cJSON_AddStringToObject(js_data,"server",supla_conf->server);
-		cJSON_AddStringToObject(js_data,"guid",btox(guid_hex,supla_conf->guid,sizeof(supla_conf->guid)));
-		cJSON_AddBoolToObject(js_data,"ssl",supla_conf->ssl);
-		cJSON_AddNumberToObject(js_data,"port",supla_conf->port);
-		cJSON_AddNumberToObject(js_data,"activity_timeout",supla_conf->activity_timeout);
-		cJSON_AddItemToObject(js,"data",js_data);
-	} else {
+	if(!supla_config){
+		js = cJSON_CreateObject();
 		js_errors = cJSON_CreateArray();
-		js_err =  cJSON_CreateObject();
-		cJSON_AddItemToObject(js_err,"title",cJSON_CreateString("SUPLA config not found"));
-		cJSON_AddItemToArray(js_errors,js_err);
 		cJSON_AddItemToObject(js,"errors",js_errors);
+		cJSON_AddItemToArray(js_errors,json_error(ESP_ERR_NOT_FOUND,"SUPLA config not found"));
+		return send_json_response(js,req);
 	}
 
-	js_txt = cJSON_Print(js);
-	cJSON_Delete(js);
+	qlen = httpd_req_get_url_query_len(req) + 1;
+	if (qlen > 1) {
+		url_query = malloc(qlen);
+		if (httpd_req_get_url_query_str(req, url_query, qlen) == ESP_OK) {
+			if (httpd_query_key_value(url_query, "action", value, sizeof(value)) == ESP_OK) {
+				ESP_LOGI(TAG,"Found URL query parameter => action=%s", value);
 
-	httpd_resp_set_type(req,HTTPD_TYPE_JSON);
-	httpd_resp_send(req, js_txt, -1);
-	free(js_txt);
-	return ESP_OK;
+				if(!strcmp(value,"erase")){
+					supla_esp_nvs_config_erase();
+
+				} else if(!strcmp(value,"save")){
+					save_config = true;
+				}
+			}
+		}
+		free(url_query);
+	}
+
+	if(req->content_len){
+		req_data = calloc(1,req->content_len+1);
+		if(!req_data)
+			return ESP_ERR_NO_MEM;
+
+		for(int bytes_left=req->content_len; bytes_left > 0; ) {
+			if ((rc = httpd_req_recv(req, req_data+bytes_recv, bytes_left)) <= 0) {
+				if (rc == HTTPD_SOCK_ERR_TIMEOUT)
+					continue;
+				else
+					return ESP_FAIL;
+			}
+			bytes_recv += rc;
+			bytes_left -= rc;
+		}
+
+		if(httpd_query_key_value(req_data,"email",value,sizeof(value)) == ESP_OK)
+			strncpy(supla_config->email,value,sizeof(supla_config->email));
+
+		if(httpd_query_key_value(req_data,"email",value,sizeof(value)) == ESP_OK)
+			strncpy(supla_config->email,value,sizeof(supla_config->email));
+
+		if(httpd_query_key_value(req_data,"server",value,sizeof(value)) == ESP_OK)
+			strncpy(supla_config->server,value,sizeof(supla_config->server));
+
+		if(httpd_query_key_value(req_data,"ssl",value,sizeof(value)) == ESP_OK)
+			supla_config->ssl = atoi(value);
+
+		if(httpd_query_key_value(req_data,"port",value,sizeof(value)) == ESP_OK)
+			supla_config->port = atoi(value);
+
+		if(httpd_query_key_value(req_data,"activity_timeout",value,sizeof(value)) == ESP_OK)
+			supla_config->activity_timeout = atoi(value);
+
+		free(req_data);
+	}
+
+	if(save_config){
+		rc = supla_esp_nvs_config_write(supla_config);
+		if(rc == 0)
+			ESP_LOGI(TAG,"SUPLA nvs config write OK");
+		else
+			ESP_LOGE(TAG,"SUPLA nvs config write ERR:%s(%d)", esp_err_to_name(rc),rc);
+	}
+
+	js = cJSON_CreateObject();
+	js_data = supla_config_to_json(supla_config);
+	cJSON_AddItemToObject(js,"data",js_data);
+	return send_json_response(js,req);
 }
-
 
 
 esp_err_t supla_esp_generate_hostname(const supla_dev_t *dev, char* buf, size_t len)

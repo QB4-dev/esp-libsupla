@@ -16,19 +16,30 @@
  * @brief Initialize SUPLA config in NVS memory
  *
  * @param[in] supla_conf SUPLA connection config
- * @return ESP_OK on success
+ * @return
+ *     - ESP_OK success
  */
 esp_err_t supla_esp_nvs_config_init(struct supla_config *supla_conf);
 
 /**
+ * @brief Write SUPLA config to NVS memory
+ *
+ * @param[in] supla_conf SUPLA connection config
+ * @return
+ *     - ESP_OK success
+ */
+esp_err_t supla_esp_nvs_config_write(struct supla_config *supla_conf);
+
+/**
  * @brief Erase SUPLA config from NVS memory
  *
- * @return ESP_OK on success
+ * @return
+ *     - ESP_OK success
  */
 esp_err_t supla_esp_nvs_config_erase(void);
 
 
-//TODO httpd config handlers GET/POST
+//httpd config handler GET/POST
 //TODO documentation
 esp_err_t supla_config_httpd_handler(httpd_req_t *req);
 
