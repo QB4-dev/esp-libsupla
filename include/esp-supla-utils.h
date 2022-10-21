@@ -8,10 +8,9 @@
 #define ESP_SUPLA_UTILS_H_
 
 #include <libsupla/device.h>
-#include <tcpip_adapter.h>
 #include <esp_http_server.h>
 #include <esp_err.h>
-
+#include <esp_netif.h>
 /**
  * @brief Initialize SUPLA config in NVS memory
  *

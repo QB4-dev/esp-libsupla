@@ -276,7 +276,8 @@ esp_err_t supla_esp_generate_hostname(const supla_dev_t *dev, char* buf, size_t 
 
 esp_err_t supla_esp_set_hostname(const supla_dev_t *dev, tcpip_adapter_if_t tcpip_if)
 {
-	char hostname[TCPIP_HOSTNAME_MAX_SIZE];
+
+	char hostname[32];
 	esp_err_t rc;
 
 	if(!dev)
@@ -285,8 +286,12 @@ esp_err_t supla_esp_set_hostname(const supla_dev_t *dev, tcpip_adapter_if_t tcpi
 	rc = supla_esp_generate_hostname(dev,hostname,sizeof(hostname));
 	if(rc != ESP_OK)
 		return rc;
-
+#ifdef ESP_PLATFORM
+    esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
+    rc = esp_netif_set_hostname(sta_netif, hostname);
+#else
 	rc = tcpip_adapter_set_hostname(tcpip_if,hostname);
+#endif	
 	if(rc != ESP_OK)
 		return rc;
 
@@ -372,5 +377,6 @@ int supla_esp_server_time_sync(supla_dev_t *dev, TSDC_UserLocalTimeResult *lt)
 
 	return settimeofday(&timeval,NULL);
 }
+
 
 
