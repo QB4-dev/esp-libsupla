@@ -286,9 +286,9 @@ esp_err_t supla_esp_set_hostname(const supla_dev_t *dev, tcpip_adapter_if_t tcpi
 	rc = supla_esp_generate_hostname(dev,hostname,sizeof(hostname));
 	if(rc != ESP_OK)
 		return rc;
-#ifdef ESP_PLATFORM
-    esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
-    rc = esp_netif_set_hostname(sta_netif, hostname);
+#if LIBSUPLA_ARCH == LIBSUPLA_ARCH_ESP32
+	esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
+	rc = esp_netif_set_hostname(sta_netif, hostname);
 #else
 	rc = tcpip_adapter_set_hostname(tcpip_if,hostname);
 #endif	
