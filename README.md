@@ -1,2 +1,2 @@
-# esp-idf-libsupla
+# esp-libsupla
 libsupla ESP IDF Component
