@@ -26,7 +26,7 @@ static char* btox(char *hex, const char *bb, int len)
 {
 	const char xx[]= "0123456789ABCDEF";
 	for(int i=len; i >= 0; --i)
-	hex[i] = xx[(bb[i>>1] >> ((1 - (i&1)) << 2)) & 0x0F];
+		hex[i] = xx[(bb[i>>1] >> ((1 - (i&1)) << 2)) & 0x0F];
 	hex[len]=0x00;
 	return hex;
 }
@@ -223,9 +223,6 @@ esp_err_t supla_config_httpd_handler(httpd_req_t *req)
 		if(httpd_query_key_value(req_data,"email",value,sizeof(value)) == ESP_OK)
 			strncpy(supla_config->email,value,sizeof(supla_config->email));
 
-		if(httpd_query_key_value(req_data,"email",value,sizeof(value)) == ESP_OK)
-			strncpy(supla_config->email,value,sizeof(supla_config->email));
-
 		if(httpd_query_key_value(req_data,"server",value,sizeof(value)) == ESP_OK)
 			strncpy(supla_config->server,value,sizeof(supla_config->server));
 
@@ -287,8 +284,18 @@ esp_err_t supla_esp_set_hostname(const supla_dev_t *dev, tcpip_adapter_if_t tcpi
 	if(rc != ESP_OK)
 		return rc;
 #if LIBSUPLA_ARCH == LIBSUPLA_ARCH_ESP32
-	esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
-	rc = esp_netif_set_hostname(sta_netif, hostname);
+	switch (tcpip_if) {
+	case TCPIP_ADAPTER_IF_AP:{
+		esp_netif_t *ap_netif = esp_netif_create_default_wifi_ap();
+		rc = esp_netif_set_hostname(ap_netif, hostname);
+		}break;
+	case TCPIP_ADAPTER_IF_STA:{
+		esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
+		rc = esp_netif_set_hostname(sta_netif, hostname);
+		}break;
+	default:
+		break;
+	}
 #else
 	rc = tcpip_adapter_set_hostname(tcpip_if,hostname);
 #endif	
