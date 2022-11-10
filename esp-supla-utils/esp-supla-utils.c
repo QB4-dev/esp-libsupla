@@ -119,12 +119,6 @@ esp_err_t supla_esp_nvs_config_init(struct supla_config *supla_conf)
 			return rc;
 		}
 	}
-	if(!supla_conf->port)
-		supla_conf->port = supla_conf->ssl ? 2016 : 2015;
-
-	if(!supla_conf->activity_timeout)
-		supla_conf->activity_timeout = 120;
-
 	return ESP_OK;
 }
 
@@ -167,7 +161,7 @@ esp_err_t supla_esp_nvs_config_erase(void)
 
 esp_err_t supla_config_httpd_handler(httpd_req_t *req)
 {
-	cJSON *js, *js_data, *js_errors;
+	cJSON *js;
 	char *url_query;
 	size_t qlen;
 	char *req_data;
@@ -180,9 +174,7 @@ esp_err_t supla_config_httpd_handler(httpd_req_t *req)
 
 	if(!supla_config){
 		js = cJSON_CreateObject();
-		js_errors = cJSON_CreateArray();
-		cJSON_AddItemToObject(js,"errors",js_errors);
-		cJSON_AddItemToArray(js_errors,json_error(ESP_ERR_NOT_FOUND,"SUPLA config not found"));
+		cJSON_AddItemToObject(js,"error",json_error(ESP_ERR_NOT_FOUND,"SUPLA config not found"));
 		return send_json_response(js,req);
 	}
 
@@ -191,7 +183,6 @@ esp_err_t supla_config_httpd_handler(httpd_req_t *req)
 		url_query = malloc(qlen);
 		if (httpd_req_get_url_query_str(req, url_query, qlen) == ESP_OK) {
 			if (httpd_query_key_value(url_query, "action", value, sizeof(value)) == ESP_OK) {
-				ESP_LOGI(TAG,"Found URL query parameter => action=%s", value);
 
 				if(!strcmp(value,"erase")){
 					supla_esp_nvs_config_erase();
@@ -226,8 +217,9 @@ esp_err_t supla_config_httpd_handler(httpd_req_t *req)
 		if(httpd_query_key_value(req_data,"server",value,sizeof(value)) == ESP_OK)
 			strncpy(supla_config->server,value,sizeof(supla_config->server));
 
+		supla_config->ssl = 0;
 		if(httpd_query_key_value(req_data,"ssl",value,sizeof(value)) == ESP_OK)
-			supla_config->ssl = atoi(value);
+			supla_config->ssl = !strcmp("on",value);
 
 		if(httpd_query_key_value(req_data,"port",value,sizeof(value)) == ESP_OK)
 			supla_config->port = atoi(value);
@@ -247,8 +239,7 @@ esp_err_t supla_config_httpd_handler(httpd_req_t *req)
 	}
 
 	js = cJSON_CreateObject();
-	js_data = supla_config_to_json(supla_config);
-	cJSON_AddItemToObject(js,"data",js_data);
+	cJSON_AddItemToObject(js,"data",supla_config_to_json(supla_config));
 	return send_json_response(js,req);
 }
 
