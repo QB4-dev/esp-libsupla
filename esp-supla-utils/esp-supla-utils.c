@@ -31,40 +31,6 @@ static char* btox(char *hex, const char *bb, int len)
 	return hex;
 }
 
-static cJSON *supla_config_to_json(struct supla_config *supla_conf)
-{
-	char guid_hex[SUPLA_GUID_HEXSIZE];
-	cJSON *js;
-
-	js = cJSON_CreateObject();
-	cJSON_AddStringToObject(js,"email",supla_conf->email);
-	cJSON_AddStringToObject(js,"server",supla_conf->server);
-	cJSON_AddStringToObject(js,"guid",btox(guid_hex,supla_conf->guid,sizeof(supla_conf->guid)));
-	cJSON_AddBoolToObject(js,"ssl",supla_conf->ssl);
-	cJSON_AddNumberToObject(js,"port",supla_conf->port);
-	cJSON_AddNumberToObject(js,"activity_timeout",supla_conf->activity_timeout);
-	return js;
-}
-
-static cJSON *json_error(int code, const char *title)
-{
-	cJSON* js_err = cJSON_CreateObject();
-	cJSON_AddNumberToObject(js_err,"code",code);
-	cJSON_AddItemToObject(js_err,"title",cJSON_CreateString(title));
-	return js_err;
-}
-
-static esp_err_t send_json_response(cJSON *js, httpd_req_t *req)
-{
-	char *js_txt = cJSON_Print(js);
-	cJSON_Delete(js);
-
-	httpd_resp_set_type(req,HTTPD_TYPE_JSON);
-	httpd_resp_send(req, js_txt, -1);
-	free(js_txt);
-	return ESP_OK;
-}
-
 esp_err_t supla_esp_nvs_config_init(struct supla_config *supla_conf)
 {
 	size_t required_size;
@@ -159,6 +125,176 @@ esp_err_t supla_esp_nvs_config_erase(void)
 	return rc;
 }
 
+esp_err_t supla_esp_generate_hostname(const supla_dev_t *dev, char* buf, size_t len)
+{
+	uint8_t mac[6];
+	const char *dev_name;
+
+	if(!dev)
+		return ESP_ERR_INVALID_ARG;
+
+	dev_name = supla_dev_get_name(dev);
+
+	esp_efuse_mac_get_default(mac);
+	if(strlen(dev_name) + 5 > len)
+		return ESP_ERR_INVALID_SIZE;
+
+	snprintf(buf,len,"%s-%02X%02X",dev_name,mac[4],mac[5]);
+	return ESP_OK;
+}
+
+esp_err_t supla_esp_set_hostname(const supla_dev_t *dev, tcpip_adapter_if_t tcpip_if)
+{
+
+	char hostname[32];
+	esp_err_t rc;
+
+	if(!dev)
+		return ESP_ERR_INVALID_ARG;
+
+	rc = supla_esp_generate_hostname(dev,hostname,sizeof(hostname));
+	if(rc != ESP_OK)
+		return rc;
+#if LIBSUPLA_ARCH == LIBSUPLA_ARCH_ESP32
+	switch (tcpip_if) {
+	case TCPIP_ADAPTER_IF_AP:{
+		esp_netif_t *ap_netif = esp_netif_create_default_wifi_ap();
+		rc = esp_netif_set_hostname(ap_netif, hostname);
+		}break;
+	case TCPIP_ADAPTER_IF_STA:{
+		esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
+		rc = esp_netif_set_hostname(sta_netif, hostname);
+		}break;
+	default:
+		break;
+	}
+#else
+	rc = tcpip_adapter_set_hostname(tcpip_if,hostname);
+#endif	
+	if(rc != ESP_OK)
+		return rc;
+
+	ESP_LOGI(TAG, "device hostname set: %s",hostname);
+	return ESP_OK;
+}
+
+esp_err_t supla_esp_init_mdns(const supla_dev_t *dev)
+{
+#if ENABLE_MDNS == y
+	char mdns_name[SUPLA_DEVICE_NAME_MAXSIZE+16];
+	esp_err_t rc;
+
+	if(!dev)
+		return ESP_ERR_INVALID_ARG;
+
+	rc = mdns_init();
+	if(rc != ESP_OK)
+		return rc;
+
+	rc = supla_esp_generate_hostname(dev,mdns_name,sizeof(mdns_name));
+	if(rc != ESP_OK)
+		return rc;
+
+	rc = mdns_hostname_set(mdns_name);
+	if(rc != ESP_OK)
+		return rc;
+
+	ESP_LOGI(TAG, "mdns hostname: %s",mdns_name);
+	return ESP_OK;
+#else
+	#warning "mDNS is disabled - .local acess will not work"
+	return ESP_ERR_NOT_SUPPORTED;
+#endif
+}
+
+
+
+esp_err_t supla_esp_get_wifi_state(supla_dev_t *dev, TDSC_ChannelState *state)
+{
+	tcpip_adapter_ip_info_t ip_info = {0};
+	wifi_ap_record_t wifi_info = {0};
+
+	if(esp_efuse_mac_get_default(state->MAC) == ESP_OK)
+		state->Fields |= SUPLA_CHANNELSTATE_FIELD_MAC;
+
+	if(esp_wifi_sta_get_ap_info(&wifi_info) == ESP_OK){
+		state->Fields |= SUPLA_CHANNELSTATE_FIELD_WIFIRSSI;
+		state->WiFiRSSI = wifi_info.rssi;
+
+		state->Fields |= SUPLA_CHANNELSTATE_FIELD_WIFISIGNALSTRENGTH;
+		if (wifi_info.rssi > -50)
+			state->WiFiSignalStrength = 100;
+		else if (wifi_info.rssi <= -100)
+			state->WiFiSignalStrength = 0;
+		else
+			state->WiFiSignalStrength = 2 * (wifi_info.rssi + 100);
+	}
+
+	if(tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA,&ip_info) == ESP_OK){
+		state->Fields |= SUPLA_CHANNELSTATE_FIELD_IPV4;
+		state->IPv4 = ip_info.ip.addr;
+	}
+	return ESP_OK;
+}
+
+int supla_esp_server_time_sync(supla_dev_t *dev, TSDC_UserLocalTimeResult *lt)
+{
+	struct tm tm;
+	struct timeval timeval;
+
+	tm.tm_year = lt->year-1900;
+	tm.tm_mon  = lt->month-1;
+	tm.tm_mday = lt->day;
+
+	tm.tm_hour = lt->hour;
+	tm.tm_min = lt->min;
+	tm.tm_sec = lt->sec;
+
+	timeval.tv_sec = mktime(&tm);
+	timeval.tv_usec = 0;
+
+	return settimeofday(&timeval,NULL);
+}
+
+static esp_err_t send_json_response(cJSON *js, httpd_req_t *req)
+{
+	char *js_txt = cJSON_Print(js);
+	cJSON_Delete(js);
+
+	httpd_resp_set_type(req,HTTPD_TYPE_JSON);
+	httpd_resp_send(req, js_txt, -1);
+	free(js_txt);
+	return ESP_OK;
+}
+
+static cJSON *json_error(int code, const char *title)
+{
+	cJSON* js_err = cJSON_CreateObject();
+	cJSON_AddNumberToObject(js_err,"code",code);
+	cJSON_AddItemToObject(js_err,"title",cJSON_CreateString(title));
+	return js_err;
+}
+
+static cJSON *supla_config_to_json(struct supla_config *supla_conf)
+{
+	char guid_hex[SUPLA_GUID_HEXSIZE];
+	char auth_hex[SUPLA_AUTHKEY_HEXSIZE];
+	cJSON *js;
+
+	if(!supla_conf)
+		return NULL;
+
+	js = cJSON_CreateObject();
+	cJSON_AddStringToObject(js,"email",supla_conf->email);
+	cJSON_AddStringToObject(js,"server",supla_conf->server);
+	cJSON_AddStringToObject(js,"guid",btox(guid_hex,supla_conf->guid,sizeof(supla_conf->guid)));
+	cJSON_AddStringToObject(js,"auth_key",btox(auth_hex,supla_conf->auth_key,sizeof(supla_conf->auth_key)));
+	cJSON_AddBoolToObject(js,"ssl",supla_conf->ssl);
+	cJSON_AddNumberToObject(js,"port",supla_conf->port);
+	cJSON_AddNumberToObject(js,"activity_timeout",supla_conf->activity_timeout);
+	return js;
+}
+
 esp_err_t supla_config_httpd_handler(httpd_req_t *req)
 {
 	cJSON *js;
@@ -243,137 +379,41 @@ esp_err_t supla_config_httpd_handler(httpd_req_t *req)
 	return send_json_response(js,req);
 }
 
-
-esp_err_t supla_esp_generate_hostname(const supla_dev_t *dev, char* buf, size_t len)
+static cJSON *supla_dev_state_to_json(supla_dev_t *dev)
 {
-	uint8_t mac[6];
-	const char *dev_name;
+	cJSON *js;
+	supla_dev_state_t state;
+	struct supla_config config;
+	time_t uptime;
+	time_t conn_uptime;
 
-	if(!dev)
-		return ESP_ERR_INVALID_ARG;
+	supla_dev_get_state(dev,&state);
+	supla_dev_get_config(dev,&config);
+	supla_dev_get_uptime(dev,&uptime);
+	supla_dev_get_connection_uptime(dev,&conn_uptime);
 
-	dev_name = supla_dev_get_name(dev);
-
-	esp_efuse_mac_get_default(mac);
-	if(strlen(dev_name) + 5 > len)
-		return ESP_ERR_INVALID_SIZE;
-
-	snprintf(buf,len,"%s-%02X%02X",dev_name,mac[4],mac[5]);
-	return ESP_OK;
+	js = cJSON_CreateObject();
+	cJSON_AddStringToObject(js,"name",supla_dev_get_name(dev));
+	cJSON_AddStringToObject(js,"software_ver",supla_dev_get_software_version(dev));
+	cJSON_AddStringToObject(js,"state",supla_dev_state_str(state));
+	cJSON_AddItemToObject(js,"config",supla_config_to_json(&config));
+	cJSON_AddNumberToObject(js,"uptime",uptime);
+	cJSON_AddNumberToObject(js,"connection_uptime",conn_uptime);
+	return js;
 }
 
-esp_err_t supla_esp_set_hostname(const supla_dev_t *dev, tcpip_adapter_if_t tcpip_if)
+esp_err_t supla_dev_httpd_handler(httpd_req_t *req)
 {
-
-	char hostname[32];
-	esp_err_t rc;
-
-	if(!dev)
-		return ESP_ERR_INVALID_ARG;
-
-	rc = supla_esp_generate_hostname(dev,hostname,sizeof(hostname));
-	if(rc != ESP_OK)
-		return rc;
-#if LIBSUPLA_ARCH == LIBSUPLA_ARCH_ESP32
-	switch (tcpip_if) {
-	case TCPIP_ADAPTER_IF_AP:{
-		esp_netif_t *ap_netif = esp_netif_create_default_wifi_ap();
-		rc = esp_netif_set_hostname(ap_netif, hostname);
-		}break;
-	case TCPIP_ADAPTER_IF_STA:{
-		esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
-		rc = esp_netif_set_hostname(sta_netif, hostname);
-		}break;
-	default:
-		break;
+	cJSON *js;
+	supla_dev_t *dev = *(supla_dev_t **)req->user_ctx;
+	if(!dev){
+		js = cJSON_CreateObject();
+		cJSON_AddItemToObject(js,"error",json_error(ESP_ERR_NOT_FOUND,"SUPLA dev not found"));
+	} else {
+		js = cJSON_CreateObject();
+		cJSON_AddItemToObject(js,"data",supla_dev_state_to_json(dev));
 	}
-#else
-	rc = tcpip_adapter_set_hostname(tcpip_if,hostname);
-#endif	
-	if(rc != ESP_OK)
-		return rc;
-
-	ESP_LOGI(TAG, "device hostname set: %s",hostname);
-	return ESP_OK;
-}
-
-
-esp_err_t supla_esp_init_mdns(const supla_dev_t *dev)
-{
-#if ENABLE_MDNS == y
-	char mdns_name[SUPLA_DEVICE_NAME_MAXSIZE+16];
-	esp_err_t rc;
-
-	if(!dev)
-		return ESP_ERR_INVALID_ARG;
-
-	rc = mdns_init();
-	if(rc != ESP_OK)
-		return rc;
-
-	rc = supla_esp_generate_hostname(dev,mdns_name,sizeof(mdns_name));
-	if(rc != ESP_OK)
-		return rc;
-
-	rc = mdns_hostname_set(mdns_name);
-	if(rc != ESP_OK)
-		return rc;
-
-	ESP_LOGI(TAG, "mdns hostname: %s",mdns_name);
-	return ESP_OK;
-#else
-	#warning "mDNS is disabled - .local acess will not work"
-	return ESP_ERR_NOT_SUPPORTED;
-#endif
-}
-
-
-
-esp_err_t supla_esp_get_wifi_state(supla_dev_t *dev, TDSC_ChannelState *state)
-{
-	tcpip_adapter_ip_info_t ip_info = {0};
-	wifi_ap_record_t wifi_info = {0};
-
-	if(esp_efuse_mac_get_default(state->MAC) == ESP_OK)
-		state->Fields |= SUPLA_CHANNELSTATE_FIELD_MAC;
-
-	if(esp_wifi_sta_get_ap_info(&wifi_info) == ESP_OK){
-		state->Fields |= SUPLA_CHANNELSTATE_FIELD_WIFIRSSI;
-		state->WiFiRSSI = wifi_info.rssi;
-
-		state->Fields |= SUPLA_CHANNELSTATE_FIELD_WIFISIGNALSTRENGTH;
-		if (wifi_info.rssi > -50)
-			state->WiFiSignalStrength = 100;
-		else if (wifi_info.rssi <= -100)
-			state->WiFiSignalStrength = 0;
-		else
-			state->WiFiSignalStrength = 2 * (wifi_info.rssi + 100);
-	}
-
-	if(tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA,&ip_info) == ESP_OK){
-		state->Fields |= SUPLA_CHANNELSTATE_FIELD_IPV4;
-		state->IPv4 = ip_info.ip.addr;
-	}
-	return ESP_OK;
-}
-
-int supla_esp_server_time_sync(supla_dev_t *dev, TSDC_UserLocalTimeResult *lt)
-{
-	struct tm tm;
-	struct timeval timeval;
-
-	tm.tm_year = lt->year-1900;
-	tm.tm_mon  = lt->month-1;
-	tm.tm_mday = lt->day;
-
-	tm.tm_hour = lt->hour;
-	tm.tm_min = lt->min;
-	tm.tm_sec = lt->sec;
-
-	timeval.tv_sec = mktime(&tm);
-	timeval.tv_usec = 0;
-
-	return settimeofday(&timeval,NULL);
+	return send_json_response(js,req);
 }
 
 

@@ -38,10 +38,6 @@ esp_err_t supla_esp_nvs_config_write(struct supla_config *supla_conf);
 esp_err_t supla_esp_nvs_config_erase(void);
 
 
-//httpd config handler GET/POST
-//TODO documentation
-esp_err_t supla_config_httpd_handler(httpd_req_t *req);
-
 /**
  * @brief generate SUPLA device hostname from device name and last two bytes
  * of MAC address like DEVNAME-XXXX
@@ -111,7 +107,11 @@ int supla_esp_get_wifi_state(supla_dev_t *dev, TDSC_ChannelState *state);
  */
 int supla_esp_server_time_sync(supla_dev_t *dev, TSDC_UserLocalTimeResult *lt);
 
+//httpd config handler GET/POST
+//TODO documentation
+esp_err_t supla_config_httpd_handler(httpd_req_t *req);
 
-//TODO start wifi_AP with devce name+mac
+////httpd device state handler GET/POST
+esp_err_t supla_dev_httpd_handler(httpd_req_t *req);
 
 #endif /* ESP_SUPLA_UTILS_H_ */
