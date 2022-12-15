@@ -11,16 +11,15 @@ COMPONENT_OBJS += libsupla/src/supla-common/log.o
 COMPONENT_OBJS += libsupla/src/supla-common/proto.o
 COMPONENT_OBJS += libsupla/src/supla-common/srpc.o
 
-COMPONENT_SRCDIRS += libsupla/src/port
-COMPONENT_OBJS += libsupla/src/port/util.o
-COMPONENT_OBJS += libsupla/src/port/net.o
-
 COMPONENT_SRCDIRS += libsupla/src
 COMPONENT_OBJS += libsupla/src/device.o
 COMPONENT_OBJS += libsupla/src/channel.o
 COMPONENT_OBJS += libsupla/src/supla-value.o
 COMPONENT_OBJS += libsupla/src/supla-extvalue.o
 COMPONENT_OBJS += libsupla/src/supla-action-trigger.o
+
+COMPONENT_SRCDIRS += platform
+COMPONENT_OBJS += platform/arch_esp.o
 
 CFLAGS += -DSUPLA_DEVICE
 

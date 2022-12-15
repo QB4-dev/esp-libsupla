@@ -17,7 +17,10 @@
 #include <esp_netif.h>
 #include <esp_wifi.h>
 #include <cJSON.h>
+
+#if ENABLE_MDNS == y
 #include <mdns.h>
+#endif
 
 static const char *TAG = "SUPLA-ESP";
 static const char *NVS_STORAGE = "supla_nvs";
@@ -127,25 +130,24 @@ esp_err_t supla_esp_nvs_config_erase(void)
 
 esp_err_t supla_esp_generate_hostname(const supla_dev_t *dev, char* buf, size_t len)
 {
+	char name[SUPLA_DEVICE_NAME_MAXSIZE];
 	uint8_t mac[6];
-	const char *dev_name;
 
 	if(!dev)
 		return ESP_ERR_INVALID_ARG;
 
-	dev_name = supla_dev_get_name(dev);
+	supla_dev_get_name(dev,name,sizeof(name));
 
 	esp_efuse_mac_get_default(mac);
-	if(strlen(dev_name) + 5 > len)
+	if(strlen(name) + 5 > len)
 		return ESP_ERR_INVALID_SIZE;
 
-	snprintf(buf,len,"%s-%02X%02X",dev_name,mac[4],mac[5]);
+	snprintf(buf,len,"%s-%02X%02X",name,mac[4],mac[5]);
 	return ESP_OK;
 }
 
 esp_err_t supla_esp_set_hostname(const supla_dev_t *dev, tcpip_adapter_if_t tcpip_if)
 {
-
 	char hostname[32];
 	esp_err_t rc;
 
@@ -155,7 +157,9 @@ esp_err_t supla_esp_set_hostname(const supla_dev_t *dev, tcpip_adapter_if_t tcpi
 	rc = supla_esp_generate_hostname(dev,hostname,sizeof(hostname));
 	if(rc != ESP_OK)
 		return rc;
-#if LIBSUPLA_ARCH == LIBSUPLA_ARCH_ESP32
+#if CONFIG_IDF_TARGET_ESP8266
+	rc = tcpip_adapter_set_hostname(tcpip_if,hostname);
+#elif CONFIG_IDF_TARGET_ESP32
 	switch (tcpip_if) {
 	case TCPIP_ADAPTER_IF_AP:{
 		esp_netif_t *ap_netif = esp_netif_create_default_wifi_ap();
@@ -168,8 +172,6 @@ esp_err_t supla_esp_set_hostname(const supla_dev_t *dev, tcpip_adapter_if_t tcpi
 	default:
 		break;
 	}
-#else
-	rc = tcpip_adapter_set_hostname(tcpip_if,hostname);
 #endif	
 	if(rc != ESP_OK)
 		return rc;
@@ -386,6 +388,11 @@ static cJSON *supla_dev_state_to_json(supla_dev_t *dev)
 	struct supla_config config;
 	time_t uptime;
 	time_t conn_uptime;
+	char name[SUPLA_DEVICE_NAME_MAXSIZE];
+	char soft_ver[SUPLA_DEVICE_NAME_MAXSIZE];
+
+	supla_dev_get_name(dev,name,sizeof(name));
+	supla_dev_get_software_version(dev,soft_ver,sizeof(soft_ver));
 
 	supla_dev_get_state(dev,&state);
 	supla_dev_get_config(dev,&config);
@@ -393,8 +400,8 @@ static cJSON *supla_dev_state_to_json(supla_dev_t *dev)
 	supla_dev_get_connection_uptime(dev,&conn_uptime);
 
 	js = cJSON_CreateObject();
-	cJSON_AddStringToObject(js,"name",supla_dev_get_name(dev));
-	cJSON_AddStringToObject(js,"software_ver",supla_dev_get_software_version(dev));
+	cJSON_AddStringToObject(js,"name",name);
+	cJSON_AddStringToObject(js,"software_ver",soft_ver);
 	cJSON_AddStringToObject(js,"state",supla_dev_state_str(state));
 	cJSON_AddItemToObject(js,"config",supla_config_to_json(&config));
 	cJSON_AddNumberToObject(js,"uptime",uptime);
