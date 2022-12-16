@@ -1,8 +1,7 @@
 /*
- * wifi.h
+ * Copyright (c) 2022 <qb4.dev@gmail.com>
  *
- *  Created on: 8 wrz 2022
- *      Author: kuba
+ * SPDX-License-Identifier: LGPL-2.1-or-later
  */
 
 #ifndef MAIN_WIFI_H_
@@ -15,7 +14,6 @@
 */
 #define EXAMPLE_ESP_WIFI_SSID      CONFIG_ESP_WIFI_SSID
 #define EXAMPLE_ESP_WIFI_PASS      CONFIG_ESP_WIFI_PASSWORD
-#define EXAMPLE_ESP_MAXIMUM_RETRY  CONFIG_ESP_MAXIMUM_RETRY
 
 void wifi_init(void);
 void wifi_init_sta(void);
