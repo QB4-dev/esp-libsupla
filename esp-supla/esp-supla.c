@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
 
-#include "esp-supla-utils.h"
+#include "../include/esp-supla.h"
 
 #include <time.h>
 #include <string.h>
@@ -18,12 +18,10 @@
 #include <esp_wifi.h>
 #include <cJSON.h>
 
-#if ENABLE_MDNS == y
-#include <mdns.h>
-#endif
-
-static const char *TAG = "SUPLA-ESP";
+static const char *TAG = "ESP-SUPLA";
 static const char *NVS_STORAGE = "supla_nvs";
+
+#define CHECK_ARG(VAL) do { if (!(VAL)) return ESP_ERR_INVALID_ARG; } while (0)
 
 static char* btox(char *hex, const char *bb, int len) 
 {
@@ -36,6 +34,7 @@ static char* btox(char *hex, const char *bb, int len)
 
 esp_err_t supla_esp_nvs_config_init(struct supla_config *supla_conf)
 {
+	CHECK_ARG(supla_conf);
 	size_t required_size;
 	nvs_handle nvs;
 	esp_err_t rc;
@@ -93,6 +92,7 @@ esp_err_t supla_esp_nvs_config_init(struct supla_config *supla_conf)
 
 esp_err_t supla_esp_nvs_config_write(struct supla_config *supla_conf)
 {
+	CHECK_ARG(supla_conf);
 	nvs_handle nvs;
 	esp_err_t rc;
 
@@ -130,11 +130,11 @@ esp_err_t supla_esp_nvs_config_erase(void)
 
 esp_err_t supla_esp_generate_hostname(const supla_dev_t *dev, char* buf, size_t len)
 {
+	CHECK_ARG(dev);
+	CHECK_ARG(buf);
+
 	char name[SUPLA_DEVICE_NAME_MAXSIZE];
 	uint8_t mac[6];
-
-	if(!dev)
-		return ESP_ERR_INVALID_ARG;
 
 	supla_dev_get_name(dev,name,sizeof(name));
 
@@ -146,73 +146,10 @@ esp_err_t supla_esp_generate_hostname(const supla_dev_t *dev, char* buf, size_t 
 	return ESP_OK;
 }
 
-esp_err_t supla_esp_set_hostname(const supla_dev_t *dev, tcpip_adapter_if_t tcpip_if)
-{
-	char hostname[32];
-	esp_err_t rc;
-
-	if(!dev)
-		return ESP_ERR_INVALID_ARG;
-
-	rc = supla_esp_generate_hostname(dev,hostname,sizeof(hostname));
-	if(rc != ESP_OK)
-		return rc;
-#if CONFIG_IDF_TARGET_ESP8266
-	rc = tcpip_adapter_set_hostname(tcpip_if,hostname);
-#elif CONFIG_IDF_TARGET_ESP32
-	switch (tcpip_if) {
-	case TCPIP_ADAPTER_IF_AP:{
-		esp_netif_t *ap_netif = esp_netif_create_default_wifi_ap();
-		rc = esp_netif_set_hostname(ap_netif, hostname);
-		}break;
-	case TCPIP_ADAPTER_IF_STA:{
-		esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
-		rc = esp_netif_set_hostname(sta_netif, hostname);
-		}break;
-	default:
-		break;
-	}
-#endif	
-	if(rc != ESP_OK)
-		return rc;
-
-	ESP_LOGI(TAG, "device hostname set: %s",hostname);
-	return ESP_OK;
-}
-
-esp_err_t supla_esp_init_mdns(const supla_dev_t *dev)
-{
-#if ENABLE_MDNS == y
-	char mdns_name[SUPLA_DEVICE_NAME_MAXSIZE+16];
-	esp_err_t rc;
-
-	if(!dev)
-		return ESP_ERR_INVALID_ARG;
-
-	rc = mdns_init();
-	if(rc != ESP_OK)
-		return rc;
-
-	rc = supla_esp_generate_hostname(dev,mdns_name,sizeof(mdns_name));
-	if(rc != ESP_OK)
-		return rc;
-
-	rc = mdns_hostname_set(mdns_name);
-	if(rc != ESP_OK)
-		return rc;
-
-	ESP_LOGI(TAG, "mdns hostname: %s",mdns_name);
-	return ESP_OK;
-#else
-	#warning "mDNS is disabled - .local acess will not work"
-	return ESP_ERR_NOT_SUPPORTED;
-#endif
-}
-
-
-
 esp_err_t supla_esp_get_wifi_state(supla_dev_t *dev, TDSC_ChannelState *state)
 {
+	CHECK_ARG(dev);
+	CHECK_ARG(state);
 	tcpip_adapter_ip_info_t ip_info = {0};
 	wifi_ap_record_t wifi_info = {0};
 
@@ -241,6 +178,8 @@ esp_err_t supla_esp_get_wifi_state(supla_dev_t *dev, TDSC_ChannelState *state)
 
 int supla_esp_server_time_sync(supla_dev_t *dev, TSDC_UserLocalTimeResult *lt)
 {
+	CHECK_ARG(dev);
+	CHECK_ARG(lt);
 	struct tm tm;
 	struct timeval timeval;
 
@@ -260,6 +199,9 @@ int supla_esp_server_time_sync(supla_dev_t *dev, TSDC_UserLocalTimeResult *lt)
 
 static esp_err_t send_json_response(cJSON *js, httpd_req_t *req)
 {
+	CHECK_ARG(js);
+	CHECK_ARG(req);
+
 	char *js_txt = cJSON_Print(js);
 	cJSON_Delete(js);
 
@@ -299,6 +241,7 @@ static cJSON *supla_config_to_json(struct supla_config *supla_conf)
 
 esp_err_t supla_config_httpd_handler(httpd_req_t *req)
 {
+	CHECK_ARG(req);
 	cJSON *js;
 	char *url_query;
 	size_t qlen;
@@ -309,7 +252,6 @@ esp_err_t supla_config_httpd_handler(httpd_req_t *req)
 	int rc;
 
 	struct supla_config *supla_config = req->user_ctx;
-
 	if(!supla_config){
 		js = cJSON_CreateObject();
 		cJSON_AddItemToObject(js,"error",json_error(ESP_ERR_NOT_FOUND,"SUPLA config not found"));
@@ -391,6 +333,9 @@ static cJSON *supla_dev_state_to_json(supla_dev_t *dev)
 	char name[SUPLA_DEVICE_NAME_MAXSIZE];
 	char soft_ver[SUPLA_DEVICE_NAME_MAXSIZE];
 
+	if(!dev)
+		return NULL;
+
 	supla_dev_get_name(dev,name,sizeof(name));
 	supla_dev_get_software_version(dev,soft_ver,sizeof(soft_ver));
 
@@ -411,6 +356,7 @@ static cJSON *supla_dev_state_to_json(supla_dev_t *dev)
 
 esp_err_t supla_dev_httpd_handler(httpd_req_t *req)
 {
+	CHECK_ARG(req);
 	cJSON *js;
 	supla_dev_t *dev = *(supla_dev_t **)req->user_ctx;
 	if(!dev){

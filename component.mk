@@ -23,5 +23,5 @@ COMPONENT_OBJS += platform/arch_esp.o
 
 CFLAGS += -DSUPLA_DEVICE
 
-COMPONENT_SRCDIRS += esp-supla-utils
-COMPONENT_OBJS += esp-supla-utils/esp-supla-utils.o
+COMPONENT_SRCDIRS += esp-supla
+COMPONENT_OBJS += esp-supla/esp-supla.o

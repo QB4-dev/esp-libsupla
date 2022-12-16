@@ -18,6 +18,7 @@
 #include <driver/gpio.h>
 
 #include <libsupla/device.h>
+#include <esp-supla.h>
 #include "wifi.h"
 
 #if CONFIG_IDF_TARGET_ESP8266
@@ -30,12 +31,14 @@
 
 static const char *TAG="APP";
 
-static supla_dev_t *supla_dev;
-
 static struct supla_config supla_config = {
 	.email = CONFIG_SUPLA_EMAIL,
 	.server = CONFIG_SUPLA_SERVER
 };
+
+static supla_dev_t *supla_dev;
+static supla_channel_t *relay_channel;
+static supla_channel_t *at_channel;
 
 //RELAY
 int relay_set_value(supla_channel_t *ch, TSD_SuplaChannelNewValue *new_value)
@@ -47,7 +50,7 @@ int relay_set_value(supla_channel_t *ch, TSD_SuplaChannelNewValue *new_value)
 	return supla_channel_set_relay_value(ch,relay_val);
 }
 
-supla_channel_t relay_channel = {
+supla_channel_config_t relay_channel_config = {
 	.type = SUPLA_CHANNELTYPE_RELAY,
 	.supported_functions = 0xFF,
 	.default_function = SUPLA_CHANNELFNC_LIGHTSWITCH,
@@ -56,7 +59,7 @@ supla_channel_t relay_channel = {
 };
 
 //ACTION TRIGGER
-supla_channel_t at_channel = {
+supla_channel_config_t at_channel_config = {
 	.type = SUPLA_CHANNELTYPE_ACTIONTRIGGER,
 	.supported_functions = 0xFF,
 	.default_function = SUPLA_CHANNELFNC_ACTIONTRIGGER,
@@ -80,7 +83,7 @@ static void io_task(void *arg)
 		level = gpio_get_level(PUSH_BUTTON_PIN);
 
 		if(level == 0 && prev_level == 1){
-			supla_channel_emit_action(&at_channel,SUPLA_ACTION_CAP_SHORT_PRESS_x1);
+			supla_channel_emit_action(at_channel,SUPLA_ACTION_CAP_SHORT_PRESS_x1);
 		}
 		prev_level = level;
 		vTaskDelay(100 / portTICK_RATE_MS);
@@ -95,11 +98,11 @@ static void supla_task(void *arg)
 		return;
 	}
 
-	supla_channel_init(&relay_channel);
-	supla_channel_init(&at_channel);
+	relay_channel = supla_channel_create(&relay_channel_config);
+	at_channel = supla_channel_create(&at_channel_config);
 
-	supla_dev_add_channel(dev,&relay_channel);
-	supla_dev_add_channel(dev,&at_channel);
+	supla_dev_add_channel(dev,relay_channel);
+	supla_dev_add_channel(dev,at_channel);
 
 	supla_dev_set_common_channel_state_callback(dev,supla_esp_get_wifi_state);
 	supla_dev_set_server_time_sync_callback(dev,supla_esp_server_time_sync);
@@ -108,8 +111,6 @@ static void supla_task(void *arg)
 		vTaskDelete(NULL);
 		return;
 	}
-	supla_esp_init_mdns(dev);
-	wifi_init_sta(dev);
 	while(1){
 		supla_dev_iterate(dev);
 		vTaskDelay(100 / portTICK_RATE_MS);
@@ -128,6 +129,7 @@ void app_main()
 #elif CONFIG_IDF_TARGET_ESP32
 	supla_dev = supla_dev_create("ESP32",NULL);
 #endif
+    wifi_init_sta();
 	xTaskCreate(&io_task, "io", 2048, NULL, 1, NULL);
 	xTaskCreate(&supla_task, "supla", 8192, supla_dev, 1, NULL);
 	while(1){

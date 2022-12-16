@@ -7,6 +7,9 @@
 #include "port/util.h"
 #include "port/net.h"
 
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+
 int supla_delay_ms(const unsigned int ms)
 {
 	vTaskDelay(ms / portTICK_RATE_MS);
@@ -50,13 +53,15 @@ int supla_cloud_connect(supla_link_t *link, const char *host, int port, unsigned
 			continue;
 
 		switch (rp->ai_family) {
-		  case AF_INET6:
+		#if LWIP_IPV6
+		case AF_INET6:
 			((struct sockaddr_in6*)(rp->ai_addr))->sin6_port = htons(port);
 			break;
-		  case AF_INET:
+		#endif
+		case AF_INET:
 			((struct sockaddr_in*)(rp->ai_addr))->sin_port = htons(port);
 			break;
-		  default:
+		default:
 			free(ssd);
 			return SUPLA_RESULT_FALSE;
 		}
