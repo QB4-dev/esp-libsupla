@@ -76,11 +76,9 @@ int supla_esp_get_wifi_state(supla_dev_t *dev, TDSC_ChannelState *state);
  */
 int supla_esp_server_time_sync(supla_dev_t *dev, TSDC_UserLocalTimeResult *lt);
 
-//httpd config handler GET/POST
-//TODO documentation
-esp_err_t supla_config_httpd_handler(httpd_req_t *req);
 
-////httpd device state handler GET/POST
+//httpd device state handler GET/POST
+//TODO documentation
 esp_err_t supla_dev_httpd_handler(httpd_req_t *req);
 
 #endif /* ESP_SUPLA_H_ */

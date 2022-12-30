@@ -39,7 +39,7 @@ static supla_channel_t *relay_channel;
 static supla_channel_t *at_channel;
 
 //RELAY
-int relay_set_value(supla_channel_t *ch, TSD_SuplaChannelNewValue *new_value)
+int led_set_value(supla_channel_t *ch, TSD_SuplaChannelNewValue *new_value)
 {
 	TRelayChannel_Value *relay_val = (TRelayChannel_Value*)new_value->value;
 
@@ -53,7 +53,7 @@ supla_channel_config_t relay_channel_config = {
 	.supported_functions = 0xFF,
 	.default_function = SUPLA_CHANNELFNC_LIGHTSWITCH,
 	.flags = SUPLA_CHANNEL_FLAG_CHANNELSTATE,
-	.on_set_value = relay_set_value
+	.on_set_value = led_set_value
 };
 
 //ACTION TRIGGER
