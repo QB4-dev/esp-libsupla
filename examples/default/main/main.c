@@ -109,6 +109,7 @@ static void supla_task(void *arg)
 		vTaskDelete(NULL);
 		return;
 	}
+        supla_dev_start(dev);
 	while(1){
 		supla_dev_iterate(dev);
 		vTaskDelay(100 / portTICK_RATE_MS);
