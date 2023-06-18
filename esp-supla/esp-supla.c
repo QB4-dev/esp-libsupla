@@ -321,7 +321,6 @@ static esp_err_t supla_dev_post_config(supla_dev_t *dev, httpd_req_t *req)
 	rc = supla_esp_nvs_config_write(&config);
 	if(rc == 0){
 		ESP_LOGI(TAG,"SUPLA nvs config write OK");
-		rc = supla_esp_nvs_config_write(&config);
 		supla_dev_stop(dev);
 		supla_dev_set_config(dev,&config);
 		supla_dev_start(dev);
