@@ -121,7 +121,7 @@ esp_err_t supla_esp_nvs_config_erase(void)
 	rc = nvs_open(NVS_STORAGE,NVS_READWRITE,&nvs);
 	if(rc == ESP_OK){
 		nvs_erase_all(nvs);
-		ESP_LOGI(TAG, "nvs config erased");
+		ESP_LOGI(TAG, "nvs erased");
 	}else{
 		ESP_LOGE(TAG, "nvs open error %s",esp_err_to_name(rc));
 	}
@@ -215,6 +215,7 @@ static cJSON *json_error(int code, const char *title)
 {
 	cJSON* js_err = cJSON_CreateObject();
 	cJSON_AddNumberToObject(js_err,"code",code);
+
 	cJSON_AddItemToObject(js_err,"title",cJSON_CreateString(title));
 	return js_err;
 }
@@ -246,8 +247,8 @@ static cJSON *supla_dev_state_to_json(supla_dev_t *dev)
 	cJSON_AddStringToObject(js,"software_ver",soft_ver);
 	cJSON_AddStringToObject(js,"guid",btox(guid_hex,config.guid,sizeof(config.guid)));
 	cJSON_AddStringToObject(js,"state",supla_dev_state_str(state));
-	cJSON_AddNumberToObject(js,"uptime",uptime);
-	cJSON_AddNumberToObject(js,"connection_uptime",conn_uptime);
+	cJSON_AddNumberToObject(js,"uptime",(int)uptime);
+	cJSON_AddNumberToObject(js,"connection_uptime",(int)conn_uptime);
 	return js;
 }
 
@@ -269,8 +270,8 @@ static cJSON *supla_dev_config_to_json(supla_dev_t *dev)
 	cJSON_AddStringToObject(js,"guid",btox(guid_hex,config.guid,sizeof(config.guid)));
 	cJSON_AddStringToObject(js,"auth_key",btox(auth_hex,config.auth_key,sizeof(config.auth_key)));
 	cJSON_AddBoolToObject(js,"ssl",config.ssl);
-	cJSON_AddNumberToObject(js,"port",config.port);
-	cJSON_AddNumberToObject(js,"activity_timeout",config.activity_timeout);
+    cJSON_AddNumberToObject(js,"port",config.port);
+    cJSON_AddNumberToObject(js,"activity_timeout",config.activity_timeout);
 	return js;
 }
 
@@ -320,13 +321,12 @@ static esp_err_t supla_dev_post_config(supla_dev_t *dev, httpd_req_t *req)
 
 	rc = supla_esp_nvs_config_write(&config);
 	if(rc == 0){
-		ESP_LOGI(TAG,"SUPLA nvs config write OK");
+	    ESP_LOGI(TAG,"nvs write OK");
 		supla_dev_stop(dev);
 		supla_dev_set_config(dev,&config);
-		supla_dev_start(dev);
 		return ESP_OK;
 	}else{
-		ESP_LOGE(TAG,"SUPLA nvs config write ERR:%s(%d)", esp_err_to_name(rc),rc);
+	    ESP_LOGE(TAG,"nvs write ERR:%s(%d)", esp_err_to_name(rc),rc);
 		return rc;
 	}
 }
@@ -362,12 +362,12 @@ esp_err_t supla_dev_httpd_handler(httpd_req_t *req)
 
 	js = cJSON_CreateObject();
 
-	dev = *(supla_dev_t **)req->user_ctx;
-	if(!dev){
-		cJSON_AddItemToObject(js,"error",json_error(ESP_ERR_NOT_FOUND,"SUPLA dev not found"));
-		return send_json_response(js,req);
-	}
+    if(!req->user_ctx){
+        cJSON_AddItemToObject(js,"error",json_error(ESP_ERR_NOT_FOUND,esp_err_to_name(ESP_ERR_NOT_FOUND)));
+        return send_json_response(js,req);
+    }
 
+	dev = *(supla_dev_t **)req->user_ctx;
 	//parse URL query
 	qlen = httpd_req_get_url_query_len(req)+1;
 	if (qlen > 1) {
