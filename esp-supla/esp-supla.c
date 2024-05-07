@@ -47,6 +47,8 @@ esp_err_t supla_esp_nvs_config_init(struct supla_config *supla_conf)
 
     nvs_flash_init();
     ESP_LOGI(TAG, "NVS config init");
+
+    memset(supla_conf, 0, sizeof(struct supla_config));
     rc = nvs_open(NVS_STORAGE, NVS_READONLY, &nvs);
     if (rc == ESP_OK) {
         nvs_get_str(nvs, "email", supla_conf->email, &required_size);
