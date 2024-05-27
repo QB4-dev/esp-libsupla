@@ -18,6 +18,11 @@
 #include <esp_wifi.h>
 #include <cJSON.h>
 
+#if CONFIG_IDF_TARGET_ESP32
+#include <esp_random.h>
+#include <esp_mac.h>
+#endif
+
 static const char *TAG = "ESP-SUPLA";
 static const char *NVS_STORAGE = "supla_nvs";
 
@@ -48,7 +53,6 @@ esp_err_t supla_esp_nvs_config_init(struct supla_config *supla_conf)
     nvs_flash_init();
     ESP_LOGI(TAG, "NVS config init");
 
-    memset(supla_conf, 0, sizeof(struct supla_config));
     rc = nvs_open(NVS_STORAGE, NVS_READONLY, &nvs);
     if (rc == ESP_OK) {
         nvs_get_str(nvs, "email", supla_conf->email, &required_size);
@@ -56,8 +60,8 @@ esp_err_t supla_esp_nvs_config_init(struct supla_config *supla_conf)
         nvs_get_blob(nvs, "guid", supla_conf->guid, &required_size);
         nvs_get_str(nvs, "server", supla_conf->server, &required_size);
         nvs_get_i8(nvs, "ssl", (int8_t *)&supla_conf->ssl);
-        nvs_get_i32(nvs, "port", &supla_conf->port);
-        nvs_get_i32(nvs, "activity_timeout", &supla_conf->activity_timeout);
+        nvs_get_i32(nvs, "port", (int32_t *)&supla_conf->port);
+        nvs_get_i32(nvs, "activity_timeout", (int32_t *)&supla_conf->activity_timeout);
         nvs_close(nvs);
     } else {
         ESP_LOGW(TAG, "nvs open error %s", esp_err_to_name(rc));
@@ -157,7 +161,6 @@ esp_err_t supla_esp_get_wifi_state(supla_dev_t *dev, TDSC_ChannelState *state)
 {
     CHECK_ARG(dev);
     CHECK_ARG(state);
-    tcpip_adapter_ip_info_t ip_info = { 0 };
     wifi_ap_record_t wifi_info = { 0 };
 
     if (esp_efuse_mac_get_default(state->MAC) == ESP_OK)
@@ -176,10 +179,17 @@ esp_err_t supla_esp_get_wifi_state(supla_dev_t *dev, TDSC_ChannelState *state)
             state->WiFiSignalStrength = 2 * (wifi_info.rssi + 100);
     }
 
+#if CONFIG_IDF_TARGET_ESP8266
+    tcpip_adapter_ip_info_t ip_info = { 0 };
     if (tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &ip_info) == ESP_OK) {
         state->Fields |= SUPLA_CHANNELSTATE_FIELD_IPV4;
         state->IPv4 = ip_info.ip.addr;
     }
+#elif CONFIG_IDF_TARGET_ESP32
+    //esp_netif_ip_info_t ip_info = {};
+
+#endif
+
     return ESP_OK;
 }
 

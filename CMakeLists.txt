@@ -11,7 +11,7 @@ set(srcs "libsupla/src/supla-common/lck.c"
          "platform/arch_esp.c"
          "esp-supla/esp-supla.c"
 )
-set(requires "esp_http_server" "nvs_flash" "json")
+set(requires "esp_http_server" "nvs_flash" "json" "esp_netif" "esp_wifi")
 
 idf_component_register(
     SRCS "${srcs}"

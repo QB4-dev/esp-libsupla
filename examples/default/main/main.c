@@ -84,7 +84,7 @@ static void io_task(void *arg)
             supla_channel_emit_action(at_channel, SUPLA_ACTION_CAP_SHORT_PRESS_x1);
         }
         prev_level = level;
-        vTaskDelay(100 / portTICK_RATE_MS);
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
@@ -112,7 +112,7 @@ static void supla_task(void *arg)
     supla_dev_start(dev);
     while (1) {
         supla_dev_iterate(dev);
-        vTaskDelay(100 / portTICK_RATE_MS);
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
@@ -132,7 +132,7 @@ void app_main()
     xTaskCreate(&io_task, "io", 2048, NULL, 1, NULL);
     xTaskCreate(&supla_task, "supla", 8192, supla_dev, 1, NULL);
     while (1) {
-        ESP_LOGI(TAG, "Free heap size: '%d'", esp_get_free_heap_size());
-        vTaskDelay(10000 / portTICK_RATE_MS);
+        ESP_LOGI(TAG, "Free heap size: %" PRIu32, esp_get_free_heap_size());
+        vTaskDelay(pdMS_TO_TICKS(10000));
     }
 }
