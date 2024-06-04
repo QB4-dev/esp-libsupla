@@ -186,7 +186,7 @@ esp_err_t supla_esp_get_wifi_state(supla_dev_t *dev, TDSC_ChannelState *state)
         state->IPv4 = ip_info.ip.addr;
     }
 #elif CONFIG_IDF_TARGET_ESP32
-    //esp_netif_ip_info_t ip_info = {};
+    esp_netif_ip_info_t ip_info = {};
     esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
     if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK) {
         state->Fields |= SUPLA_CHANNELSTATE_FIELD_IPV4;
