@@ -38,7 +38,6 @@ esp_err_t supla_esp_nvs_config_write(struct supla_config *supla_conf);
  */
 esp_err_t supla_esp_nvs_config_erase(void);
 
-
 /**
  * @brief generate SUPLA device hostname from device name and last two bytes
  * of MAC address like DEVNAME-XXXX
@@ -51,8 +50,7 @@ esp_err_t supla_esp_nvs_config_erase(void);
  *     - ESP_ERR_INVALID_ARG  no SUPLA device
  *     - ESP_ERR_INVALID_SIZE not enough space in buffer
  */
-esp_err_t supla_esp_generate_hostname(const supla_dev_t *dev, char* buf, size_t len);
-
+esp_err_t supla_esp_generate_hostname(const supla_dev_t *dev, char *buf, size_t len);
 
 /**
  * @brief fill SUPLA channel state with wifi connection data
@@ -76,9 +74,10 @@ int supla_esp_get_wifi_state(supla_dev_t *dev, TDSC_ChannelState *state);
  */
 int supla_esp_server_time_sync(supla_dev_t *dev, TSDC_UserLocalTimeResult *lt);
 
-
 //httpd device state handler GET/POST
 //TODO documentation
 esp_err_t supla_dev_httpd_handler(httpd_req_t *req);
+
+esp_err_t supla_dev_basic_httpd_handler(httpd_req_t *req);
 
 #endif /* ESP_SUPLA_H_ */

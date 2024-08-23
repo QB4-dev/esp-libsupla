@@ -25,3 +25,4 @@ CFLAGS += -DSUPLA_DEVICE
 
 COMPONENT_SRCDIRS += esp-supla
 COMPONENT_OBJS += esp-supla/esp-supla.o
+COMPONENT_OBJS += esp-supla/esp-supla-httpd.o
