@@ -10,12 +10,12 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
-int supla_delay_ms(const unsigned int ms)
+uint64_t supla_time_getmonotonictime_milliseconds(void)
 {
-    vTaskDelay(ms / portTICK_PERIOD_MS);
-    return 0;
+    struct timespec current_time;
+    clock_gettime(CLOCK_MONOTONIC, &current_time);
+    return (uint64_t)((current_time.tv_sec * 1000) + (current_time.tv_nsec / 1000000));
 }
-
 typedef struct {
     int sfd;
 } socket_data_t;
