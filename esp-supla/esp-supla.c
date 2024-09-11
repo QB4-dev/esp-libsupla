@@ -219,6 +219,13 @@ int supla_esp_server_time_sync(supla_dev_t *dev, TSDC_UserLocalTimeResult *lt)
     return settimeofday(&timeval, NULL);
 }
 
+int supla_esp_restart_callback(supla_dev_t *dev)
+{
+    CHECK_ARG(dev);
+    esp_restart();
+    return ESP_OK;
+}
+
 static esp_err_t send_json_response(cJSON *js, httpd_req_t *req)
 {
     CHECK_ARG(js);
