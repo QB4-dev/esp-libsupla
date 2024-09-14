@@ -9,6 +9,30 @@
 
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <esp_log.h>
+
+#ifdef CONFIG_ESP_LIBSUPLA_USE_ESP_TLS
+#include <esp_tls.h>
+
+#ifndef CONFIG_IDF_TARGET_ESP32
+// delete name variant is deprecated in ESP-IDF, however ESP8266 RTOS still
+// use it.
+#define esp_tls_conn_destroy esp_tls_conn_delete
+
+// Latest ESP-IDF moved definition of esp_tls_t to private section and added
+// methods to access members. This change is missing in esp8266, so below
+// method is added to keep the same functionality
+void esp_tls_get_error_handle(esp_tls_t *client, esp_tls_error_handle_t *errorHandle)
+{
+    *errorHandle = client->error_handle;
+}
+#endif
+
+extern const uint8_t server_cert_pem_start[] asm("_binary_supla_org_cert_pem_start");
+extern const uint8_t server_cert_pem_end[] asm("_binary_supla_org_cert_pem_end");
+#endif
+
+static const char *TAG = "SUPLA";
 
 uint64_t supla_time_getmonotonictime_milliseconds(void)
 {
@@ -16,9 +40,62 @@ uint64_t supla_time_getmonotonictime_milliseconds(void)
     clock_gettime(CLOCK_MONOTONIC, &current_time);
     return (uint64_t)((current_time.tv_sec * 1000) + (current_time.tv_nsec / 1000000));
 }
+
+#ifdef CONFIG_ESP_LIBSUPLA_USE_ESP_TLS
+
+int supla_cloud_connect(supla_link_t *link, const char *host, int port, unsigned char ssl)
+{
+    esp_tls_cfg_t cfg = {
+        .cacert_pem_buf = server_cert_pem_start,
+        .cacert_pem_bytes = server_cert_pem_end - server_cert_pem_start,
+        .non_block = true,
+        .timeout_ms = 10000 //
+    };
+
+    esp_tls_error_handle_t esp_tls_errh;
+    struct esp_tls *tls = esp_tls_init();
+
+    if (tls != NULL) {
+        *link = tls;
+    } else {
+        *link = NULL;
+        return SUPLA_RESULT_FALSE;
+    }
+
+    int rc = esp_tls_conn_new_sync(host, strlen(host), port, ssl ? &cfg : NULL, tls);
+    if (rc == 1) {
+        return SUPLA_RESULT_TRUE;
+    } else {
+        esp_tls_get_error_handle(tls, &esp_tls_errh);
+
+        ESP_LOGE(TAG, "esp_tls_conn_new_sync failed. Last errors: 0x%x 0x%x 0x%x",
+                 esp_tls_errh->last_error, esp_tls_errh->esp_tls_error_code,
+                 esp_tls_errh->esp_tls_flags);
+        return SUPLA_RESULT_FALSE;
+    }
+}
+
+int supla_cloud_send(supla_link_t link, void *buf, int count)
+{
+    return esp_tls_conn_write(link, buf, count);
+}
+
+int supla_cloud_recv(supla_link_t link, void *buf, int count)
+{
+    return esp_tls_conn_read(link, buf, count);
+}
+
+int supla_cloud_disconnect(supla_link_t *link)
+{
+    esp_tls_conn_destroy(*link);
+    return 0;
+}
+
+#else
+
 typedef struct {
     int sfd;
-} socket_data_t;
+} link_data_t;
 
 int supla_cloud_connect(supla_link_t *link, const char *host, int port, unsigned char ssl)
 {
@@ -26,14 +103,17 @@ int supla_cloud_connect(supla_link_t *link, const char *host, int port, unsigned
     struct addrinfo *result, *rp = NULL;
     int rc;
 
-    socket_data_t *ssd = malloc(sizeof(socket_data_t));
-    if (!ssd)
+    if (ssl)
+        ESP_LOGW(TAG, "esp_tls support is disabled, cannot create secure connection");
+
+    link_data_t *ssd = calloc(1, sizeof(link_data_t));
+    if (ssd) {
+        *link = ssd;
+        ssd->sfd = -1;
+    } else {
+        *link = NULL;
         return SUPLA_RESULT_FALSE;
-
-    memset(ssd, 0, sizeof(socket_data_t));
-    ssd->sfd = -1;
-
-    *link = ssd;
+    }
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
@@ -87,14 +167,14 @@ int supla_cloud_connect(supla_link_t *link, const char *host, int port, unsigned
 
 int supla_cloud_send(supla_link_t link, void *buf, int count)
 {
-    socket_data_t *ssd = link;
+    link_data_t *ssd = link;
     return send(ssd->sfd, buf, count, MSG_NOSIGNAL);
 }
 
 int supla_cloud_recv(supla_link_t link, void *buf, int count)
 {
-    socket_data_t *socket_data = link;
-    return recv(socket_data->sfd, buf, count, MSG_DONTWAIT);
+    link_data_t *ssd = link;
+    return recv(ssd->sfd, buf, count, MSG_DONTWAIT);
 }
 
 int supla_cloud_disconnect(supla_link_t *link)
@@ -102,7 +182,7 @@ int supla_cloud_disconnect(supla_link_t *link)
     if (!link)
         return EINVAL;
 
-    socket_data_t *ssd = *link;
+    link_data_t *ssd = *link;
     if (!ssd)
         return EINVAL;
 
@@ -113,3 +193,5 @@ int supla_cloud_disconnect(supla_link_t *link)
     free(ssd);
     return 0;
 }
+
+#endif /* CONFIG_ESP_LIBSUPLA_USE_ESP_TLS */
