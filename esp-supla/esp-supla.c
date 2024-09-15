@@ -61,7 +61,6 @@ esp_err_t supla_esp_nvs_config_init(struct supla_config *supla_conf)
         nvs_get_str(nvs, "server", supla_conf->server, &required_size);
         nvs_get_i8(nvs, "ssl", (int8_t *)&supla_conf->ssl);
         nvs_get_i32(nvs, "port", (int32_t *)&supla_conf->port);
-        nvs_get_i32(nvs, "activity_timeout", (int32_t *)&supla_conf->activity_timeout);
         nvs_close(nvs);
     } else {
         ESP_LOGW(TAG, "nvs open error %s", esp_err_to_name(rc));
@@ -114,7 +113,6 @@ esp_err_t supla_esp_nvs_config_write(struct supla_config *supla_conf)
         nvs_set_str(nvs, "server", supla_conf->server);
         nvs_set_i8(nvs, "ssl", supla_conf->ssl);
         nvs_set_i32(nvs, "port", supla_conf->port);
-        nvs_set_i32(nvs, "activity_timeout", supla_conf->activity_timeout);
         nvs_commit(nvs);
         nvs_close(nvs);
     } else {
@@ -300,7 +298,6 @@ static cJSON *supla_dev_config_to_json(supla_dev_t *dev)
                             btox(auth_hex, config.auth_key, sizeof(config.auth_key)));
     cJSON_AddBoolToObject(js, "ssl", config.ssl);
     cJSON_AddNumberToObject(js, "port", config.port);
-    cJSON_AddNumberToObject(js, "activity_timeout", config.activity_timeout);
     return js;
 }
 
@@ -341,9 +338,6 @@ static esp_err_t supla_dev_post_config(supla_dev_t *dev, httpd_req_t *req)
 
         if (httpd_query_key_value(req_data, "port", value, sizeof(value)) == ESP_OK)
             config.port = atoi(value);
-
-        if (httpd_query_key_value(req_data, "activity_timeout", value, sizeof(value)) == ESP_OK)
-            config.activity_timeout = atoi(value);
 
         free(req_data);
     }
