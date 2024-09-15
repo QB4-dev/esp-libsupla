@@ -1,0 +1,7 @@
+menu "esp-libsupla"
+
+    config ESP_LIBSUPLA_USE_ESP_TLS
+        bool "Use ESP-TLS for secure connection with cloud"
+        default y
+
+endmenu
