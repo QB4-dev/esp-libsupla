@@ -11,12 +11,13 @@ set(srcs "libsupla/src/supla-common/lck.c"
          "platform/arch_esp.c"
          "esp-supla/esp-supla.c"
 )
-set(requires "esp_http_server" "nvs_flash" "json" "esp_netif" "esp_wifi")
+set(requires "esp_http_server" "nvs_flash" "json" "esp_netif" "esp_wifi" "esp-tls")
 
 idf_component_register(
     SRCS "${srcs}"
     INCLUDE_DIRS "${include_dirs}"
     REQUIRES "${requires}"
+    EMBED_TXTFILES supla_org_cert.pem
 )
 
 target_compile_definitions(${COMPONENT_LIB} PUBLIC "-DSUPLA_DEVICE")
