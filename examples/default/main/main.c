@@ -31,7 +31,9 @@ static const char *TAG = "APP";
 
 static struct supla_config supla_config = {
     .email = CONFIG_SUPLA_EMAIL,
-    .server = CONFIG_SUPLA_SERVER //
+    .server = CONFIG_SUPLA_SERVER,
+    .port = 2016,
+    .ssl = 1//
 };
 
 static supla_dev_t *supla_dev;
