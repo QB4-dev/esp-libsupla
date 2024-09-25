@@ -53,6 +53,7 @@ int supla_cloud_connect(supla_link_t *link, const char *host, int port, unsigned
     };
 
     esp_tls_error_handle_t esp_tls_errh;
+    int sockfd = 0;
     struct esp_tls *tls = esp_tls_init();
 
     if (tls != NULL) {
@@ -64,6 +65,9 @@ int supla_cloud_connect(supla_link_t *link, const char *host, int port, unsigned
 
     int rc = esp_tls_conn_new_sync(host, strlen(host), port, ssl ? &cfg : NULL, tls);
     if (rc == 1) {
+        if (esp_tls_get_conn_sockfd(tls, &sockfd) == ESP_OK)
+            fcntl(sockfd, F_SETFL, O_NONBLOCK);
+
         return SUPLA_RESULT_TRUE;
     } else {
         esp_tls_get_error_handle(tls, &esp_tls_errh);
