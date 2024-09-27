@@ -122,6 +122,50 @@ esp_err_t supla_esp_nvs_config_write(struct supla_config *supla_conf)
     return ESP_OK;
 }
 
+esp_err_t supla_esp_nvs_channel_config_store(supla_channel_t *ch, void *nvs_config, size_t len)
+{
+    CHECK_ARG(ch);
+    CHECK_ARG(nvs_config);
+    nvs_handle nvs;
+    char nvs_key[8];
+    esp_err_t rc;
+    int ch_num = supla_channel_get_assigned_number(ch);
+
+    snprintf(nvs_key, sizeof(nvs_key), "ch%02d", ch_num);
+    rc = nvs_open(NVS_STORAGE, NVS_READWRITE, &nvs);
+    if (rc == ESP_OK) {
+        nvs_set_blob(nvs, nvs_key, nvs_config, len);
+        nvs_commit(nvs);
+        nvs_close(nvs);
+        supla_log(LOG_INFO, "nvs stored ch[%02d] config as '%s'", ch_num, nvs_key);
+    } else {
+        supla_log(LOG_ERR, "nvs open error %s", esp_err_to_name(rc));
+        return rc;
+    }
+    return ESP_OK;
+}
+
+esp_err_t supla_esp_nvs_channel_config_restore(supla_channel_t *ch, void *nvs_config, size_t len)
+{
+    CHECK_ARG(ch);
+    CHECK_ARG(nvs_config);
+    nvs_handle nvs;
+    char nvs_key[8];
+    esp_err_t rc;
+    int ch_num = supla_channel_get_assigned_number(ch);
+
+    snprintf(nvs_key, sizeof(nvs_key), "ch%02d", ch_num);
+    rc = nvs_open(NVS_STORAGE, NVS_READONLY, &nvs);
+    if (rc == ESP_OK) {
+        nvs_get_blob(nvs, nvs_key, nvs_config, &len);
+        nvs_close(nvs);
+    } else {
+        supla_log(LOG_ERR, "nvs open error %s", esp_err_to_name(rc));
+        return rc;
+    }
+    return ESP_OK;
+}
+
 esp_err_t supla_esp_nvs_config_erase(void)
 {
     nvs_handle nvs;
@@ -281,23 +325,22 @@ static cJSON *supla_dev_state_to_json(supla_dev_t *dev)
 static cJSON *supla_dev_config_to_json(supla_dev_t *dev)
 {
     cJSON *js;
-    struct supla_config config;
+    struct supla_config conf;
     char guid_hex[SUPLA_GUID_HEXSIZE];
     char auth_hex[SUPLA_AUTHKEY_HEXSIZE];
 
     if (!dev)
         return NULL;
 
-    supla_dev_get_config(dev, &config);
+    supla_dev_get_config(dev, &conf);
 
     js = cJSON_CreateObject();
-    cJSON_AddStringToObject(js, "email", config.email);
-    cJSON_AddStringToObject(js, "server", config.server);
-    cJSON_AddStringToObject(js, "guid", btox(guid_hex, config.guid, sizeof(config.guid)));
-    cJSON_AddStringToObject(js, "auth_key",
-                            btox(auth_hex, config.auth_key, sizeof(config.auth_key)));
-    cJSON_AddBoolToObject(js, "ssl", config.ssl);
-    cJSON_AddNumberToObject(js, "port", config.port);
+    cJSON_AddStringToObject(js, "email", conf.email);
+    cJSON_AddStringToObject(js, "server", conf.server);
+    cJSON_AddStringToObject(js, "guid", btox(guid_hex, conf.guid, sizeof(conf.guid)));
+    cJSON_AddStringToObject(js, "auth_key", btox(auth_hex, conf.auth_key, sizeof(conf.auth_key)));
+    cJSON_AddBoolToObject(js, "ssl", conf.ssl);
+    cJSON_AddNumberToObject(js, "port", conf.port);
     return js;
 }
 
