@@ -86,8 +86,28 @@ int supla_cloud_send(supla_link_t link, void *buf, int count)
 
 int supla_cloud_recv(supla_link_t link, void *buf, int count)
 {
-    return esp_tls_conn_read(link, buf, count);
+    int rc = 0;
+    do {
+        rc = esp_tls_conn_read(link, buf, count);
+        if (rc == ESP_TLS_ERR_SSL_WANT_READ || rc == ESP_TLS_ERR_SSL_WANT_WRITE) {
+            vTaskDelay(100);
+            continue;
+        }
+        if (rc < 0) {
+            ESP_LOGE(TAG, "esp_tls_conn_read  returned -0x%x", -rc);
+            rc = 0;
+            break;
+        }
+        if (rc == 0) {
+            ESP_LOGE(TAG, "connection closed");
+            return 0;
+        }
+        break;
+    } while (1);
+    return rc;
 }
+
+//return esp_tls_conn_read(link, buf, count);
 
 int supla_cloud_disconnect(supla_link_t *link)
 {
