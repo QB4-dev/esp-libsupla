@@ -55,12 +55,16 @@ esp_err_t supla_esp_nvs_config_init(struct supla_config *supla_conf)
 
     rc = nvs_open(NVS_STORAGE, NVS_READONLY, &nvs);
     if (rc == ESP_OK) {
-        nvs_get_str(nvs, "email", supla_conf->email, &required_size);
-        nvs_get_blob(nvs, "auth_key", supla_conf->auth_key, &required_size);
+        required_size = SUPLA_GUID_SIZE;
         nvs_get_blob(nvs, "guid", supla_conf->guid, &required_size);
+        required_size = SUPLA_AUTHKEY_SIZE;
+        nvs_get_blob(nvs, "auth_key", supla_conf->auth_key, &required_size);
+        required_size = SUPLA_EMAIL_MAXSIZE;
+        nvs_get_str(nvs, "email", supla_conf->email, &required_size);
+        required_size = SUPLA_SERVER_NAME_MAXSIZE;
         nvs_get_str(nvs, "server", supla_conf->server, &required_size);
-        nvs_get_i8(nvs, "ssl", (int8_t *)&supla_conf->ssl);
         nvs_get_i32(nvs, "port", (int32_t *)&supla_conf->port);
+        nvs_get_i8(nvs, "ssl", (int8_t *)&supla_conf->ssl);
         nvs_close(nvs);
     } else {
         ESP_LOGW(TAG, "nvs open error %s", esp_err_to_name(rc));
@@ -107,12 +111,12 @@ esp_err_t supla_esp_nvs_config_write(struct supla_config *supla_conf)
 
     rc = nvs_open(NVS_STORAGE, NVS_READWRITE, &nvs);
     if (rc == ESP_OK) {
-        nvs_set_str(nvs, "email", supla_conf->email);
-        nvs_set_blob(nvs, "auth_key", supla_conf->auth_key, SUPLA_AUTHKEY_SIZE);
         nvs_set_blob(nvs, "guid", supla_conf->guid, SUPLA_GUID_SIZE);
+        nvs_set_blob(nvs, "auth_key", supla_conf->auth_key, SUPLA_AUTHKEY_SIZE);
+        nvs_set_str(nvs, "email", supla_conf->email);
         nvs_set_str(nvs, "server", supla_conf->server);
-        nvs_set_i8(nvs, "ssl", supla_conf->ssl);
         nvs_set_i32(nvs, "port", supla_conf->port);
+        nvs_set_i8(nvs, "ssl", supla_conf->ssl);
         nvs_commit(nvs);
         nvs_close(nvs);
     } else {
@@ -339,8 +343,10 @@ static cJSON *supla_dev_config_to_json(supla_dev_t *dev)
     cJSON_AddStringToObject(js, "server", conf.server);
     cJSON_AddStringToObject(js, "guid", btox(guid_hex, conf.guid, sizeof(conf.guid)));
     cJSON_AddStringToObject(js, "auth_key", btox(auth_hex, conf.auth_key, sizeof(conf.auth_key)));
-    cJSON_AddBoolToObject(js, "ssl", conf.ssl);
     cJSON_AddNumberToObject(js, "port", conf.port);
+#ifdef CONFIG_ESP_LIBSUPLA_USE_ESP_TLS
+    cJSON_AddBoolToObject(js, "ssl", conf.ssl);
+#endif
     return js;
 }
 
@@ -376,8 +382,10 @@ static esp_err_t supla_dev_post_config(supla_dev_t *dev, httpd_req_t *req)
             strncpy(config.server, value, sizeof(config.server));
 
         config.ssl = 0;
+#ifdef CONFIG_ESP_LIBSUPLA_USE_ESP_TLS
         if (httpd_query_key_value(req_data, "ssl", value, sizeof(value)) == ESP_OK)
             config.ssl = !strcmp("on", value);
+#endif
 
         if (httpd_query_key_value(req_data, "port", value, sizeof(value)) == ESP_OK)
             config.port = atoi(value);
