@@ -107,8 +107,6 @@ int supla_cloud_recv(supla_link_t link, void *buf, int count)
     return rc;
 }
 
-//return esp_tls_conn_read(link, buf, count);
-
 int supla_cloud_disconnect(supla_link_t *link)
 {
     esp_tls_conn_destroy(*link);
@@ -127,8 +125,10 @@ int supla_cloud_connect(supla_link_t *link, const char *host, int port, unsigned
     struct addrinfo *result, *rp = NULL;
     int rc;
 
-    if (ssl)
-        ESP_LOGW(TAG, "esp_tls support is disabled, cannot create secure connection");
+    if (ssl) {
+        port = (port != 2016) ? port : 2015; //switch to default unencrypted port
+        ESP_LOGW(TAG, "esp_tls support is disabled, switching to port=%d", port);
+    }
 
     link_data_t *ssd = calloc(1, sizeof(link_data_t));
     if (ssd) {
