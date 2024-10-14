@@ -57,12 +57,16 @@ esp_err_t supla_esp_nvs_config_init(struct supla_config *supla_conf)
     if (rc == ESP_OK) {
         required_size = SUPLA_GUID_SIZE;
         nvs_get_blob(nvs, "guid", supla_conf->guid, &required_size);
+
         required_size = SUPLA_AUTHKEY_SIZE;
         nvs_get_blob(nvs, "auth_key", supla_conf->auth_key, &required_size);
+
         required_size = SUPLA_EMAIL_MAXSIZE;
         nvs_get_str(nvs, "email", supla_conf->email, &required_size);
+
         required_size = SUPLA_SERVER_NAME_MAXSIZE;
         nvs_get_str(nvs, "server", supla_conf->server, &required_size);
+
         nvs_get_i32(nvs, "port", (int32_t *)&supla_conf->port);
         nvs_get_i8(nvs, "ssl", (int8_t *)&supla_conf->ssl);
         nvs_close(nvs);
@@ -141,11 +145,11 @@ esp_err_t supla_esp_nvs_channel_config_store(supla_channel_t *ch, void *nvs_conf
         nvs_set_blob(nvs, nvs_key, nvs_config, len);
         nvs_commit(nvs);
         nvs_close(nvs);
-        supla_log(LOG_INFO, "nvs stored ch[%02d] config as '%s'", ch_num, nvs_key);
     } else {
         supla_log(LOG_ERR, "nvs open error %s", esp_err_to_name(rc));
         return rc;
     }
+    ESP_LOGI(TAG, "ch[%d] config stored to NVS", ch_num);
     return ESP_OK;
 }
 
@@ -167,6 +171,7 @@ esp_err_t supla_esp_nvs_channel_config_restore(supla_channel_t *ch, void *nvs_co
         supla_log(LOG_ERR, "nvs open error %s", esp_err_to_name(rc));
         return rc;
     }
+    ESP_LOGI(TAG, "ch[%d] config restored from NVS", ch_num);
     return ESP_OK;
 }
 
