@@ -137,20 +137,30 @@ esp_err_t supla_esp_nvs_channel_config_store(supla_channel_t *ch, void *nvs_conf
     nvs_handle nvs;
     char nvs_key[8];
     esp_err_t rc;
+    void *stored;
+    size_t stored_len;
     int ch_num = supla_channel_get_assigned_number(ch);
+
+    stored = malloc(len);
+    if (!stored)
+        return ESP_ERR_NO_MEM;
 
     snprintf(nvs_key, sizeof(nvs_key), "ch%02d", ch_num);
     rc = nvs_open(NVS_STORAGE, NVS_READWRITE, &nvs);
     if (rc == ESP_OK) {
-        nvs_set_blob(nvs, nvs_key, nvs_config, len);
-        nvs_commit(nvs);
+        //compare data and store if different
+        nvs_get_blob(nvs, nvs_key, stored, &stored_len);
+        if (memcmp(nvs_config, stored, len) != 0) {
+            nvs_set_blob(nvs, nvs_key, nvs_config, len);
+            nvs_commit(nvs);
+            ESP_LOGI(TAG, "ch[%d] config stored to NVS", ch_num);
+        }
         nvs_close(nvs);
     } else {
         supla_log(LOG_ERR, "nvs open error %s", esp_err_to_name(rc));
-        return rc;
     }
-    ESP_LOGI(TAG, "ch[%d] config stored to NVS", ch_num);
-    return ESP_OK;
+    free(stored);
+    return rc;
 }
 
 esp_err_t supla_esp_nvs_channel_config_restore(supla_channel_t *ch, void *nvs_config, size_t len)
@@ -388,6 +398,7 @@ static esp_err_t supla_dev_post_config(supla_dev_t *dev, httpd_req_t *req)
 
         config.ssl = 0;
 #ifdef CONFIG_ESP_LIBSUPLA_USE_ESP_TLS
+        config.ssl = false;
         if (httpd_query_key_value(req_data, "ssl", value, sizeof(value)) == ESP_OK)
             config.ssl = !strcmp("on", value);
 #endif
