@@ -130,7 +130,7 @@ esp_err_t supla_esp_nvs_config_write(struct supla_config *supla_conf)
     return ESP_OK;
 }
 
-esp_err_t supla_esp_nvs_channel_config_store(supla_channel_t *ch, void *nvs_config, size_t len)
+esp_err_t supla_esp_nvs_channel_state_store(supla_channel_t *ch, void *nvs_config, size_t len)
 {
     CHECK_ARG(ch);
     CHECK_ARG(nvs_config);
@@ -163,7 +163,7 @@ esp_err_t supla_esp_nvs_channel_config_store(supla_channel_t *ch, void *nvs_conf
     return rc;
 }
 
-esp_err_t supla_esp_nvs_channel_config_restore(supla_channel_t *ch, void *nvs_config, size_t len)
+esp_err_t supla_esp_nvs_channel_state_restore(supla_channel_t *ch, void *nvs_config, size_t len)
 {
     CHECK_ARG(ch);
     CHECK_ARG(nvs_config);
@@ -185,7 +185,7 @@ esp_err_t supla_esp_nvs_channel_config_restore(supla_channel_t *ch, void *nvs_co
     return ESP_OK;
 }
 
-esp_err_t supla_esp_nvs_config_erase(void)
+esp_err_t supla_esp_nvs_data_erase(void)
 {
     nvs_handle nvs;
     esp_err_t rc;
@@ -426,7 +426,7 @@ static esp_err_t supla_dev_erase_config(supla_dev_t *dev)
     struct supla_config config = { 0 };
     int rc;
 
-    rc = supla_esp_nvs_config_erase();
+    rc = supla_esp_nvs_data_erase();
     if (rc != ESP_OK)
         return rc;
 
