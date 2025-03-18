@@ -14,7 +14,7 @@
 #ifdef CONFIG_ESP_LIBSUPLA_USE_ESP_TLS
 #include <esp_tls.h>
 
-#ifndef CONFIG_IDF_TARGET_ESP32
+#ifdef CONFIG_IDF_TARGET_ESP8266
 // delete name variant is deprecated in ESP-IDF, however ESP8266 RTOS still
 // use it.
 #define esp_tls_conn_destroy esp_tls_conn_delete

@@ -18,7 +18,7 @@
 #include <esp_wifi.h>
 #include <cJSON.h>
 
-#if CONFIG_IDF_TARGET_ESP32
+#ifndef CONFIG_IDF_TARGET_ESP8266
 #include <esp_random.h>
 #include <esp_mac.h>
 #endif
