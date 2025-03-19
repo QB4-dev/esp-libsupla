@@ -22,7 +22,7 @@
 #if CONFIG_IDF_TARGET_ESP8266
 #define PUSH_BUTTON_PIN GPIO_NUM_0
 #define LED_PIN GPIO_NUM_2
-#elif CONFIG_IDF_TARGET_ESP32
+#else //ESP32xx
 #define PUSH_BUTTON_PIN GPIO_NUM_0
 #define LED_PIN GPIO_NUM_27
 #endif
@@ -127,7 +127,7 @@ void app_main()
     wifi_init();
 #if CONFIG_IDF_TARGET_ESP8266
     supla_dev = supla_dev_create("ESP8266", NULL);
-#elif CONFIG_IDF_TARGET_ESP32
+#else //ESP32xx
     supla_dev = supla_dev_create("ESP32", NULL);
 #endif
     wifi_init_sta();
