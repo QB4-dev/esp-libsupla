@@ -79,7 +79,7 @@ void wifi_init(void)
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
 
-#if CONFIG_IDF_TARGET_ESP32
+#ifndef CONFIG_IDF_TARGET_ESP8266
     esp_netif_create_default_wifi_sta();
 #endif
 

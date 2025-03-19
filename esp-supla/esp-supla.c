@@ -18,9 +18,9 @@
 #include <esp_wifi.h>
 #include <cJSON.h>
 
-#if CONFIG_IDF_TARGET_ESP32
-#include <esp_random.h>
-#include <esp_mac.h>
+#ifndef CONFIG_IDF_TARGET_ESP8266
+#include <esp_random.h> //ESP-IDF only
+#include <esp_mac.h>    //ESP-IDF only
 #endif
 
 static const char *TAG = "ESP-SUPLA";
@@ -130,30 +130,40 @@ esp_err_t supla_esp_nvs_config_write(struct supla_config *supla_conf)
     return ESP_OK;
 }
 
-esp_err_t supla_esp_nvs_channel_config_store(supla_channel_t *ch, void *nvs_config, size_t len)
+esp_err_t supla_esp_nvs_channel_state_store(supla_channel_t *ch, void *nvs_config, size_t len)
 {
     CHECK_ARG(ch);
     CHECK_ARG(nvs_config);
     nvs_handle nvs;
     char nvs_key[8];
     esp_err_t rc;
+    void *stored;
+    size_t stored_len;
     int ch_num = supla_channel_get_assigned_number(ch);
+
+    stored = malloc(len);
+    if (!stored)
+        return ESP_ERR_NO_MEM;
 
     snprintf(nvs_key, sizeof(nvs_key), "ch%02d", ch_num);
     rc = nvs_open(NVS_STORAGE, NVS_READWRITE, &nvs);
     if (rc == ESP_OK) {
-        nvs_set_blob(nvs, nvs_key, nvs_config, len);
-        nvs_commit(nvs);
+        //compare data and store if different
+        nvs_get_blob(nvs, nvs_key, stored, &stored_len);
+        if (memcmp(nvs_config, stored, len) != 0) {
+            nvs_set_blob(nvs, nvs_key, nvs_config, len);
+            nvs_commit(nvs);
+            ESP_LOGI(TAG, "ch[%d] config stored to NVS", ch_num);
+        }
         nvs_close(nvs);
     } else {
         supla_log(LOG_ERR, "nvs open error %s", esp_err_to_name(rc));
-        return rc;
     }
-    ESP_LOGI(TAG, "ch[%d] config stored to NVS", ch_num);
-    return ESP_OK;
+    free(stored);
+    return rc;
 }
 
-esp_err_t supla_esp_nvs_channel_config_restore(supla_channel_t *ch, void *nvs_config, size_t len)
+esp_err_t supla_esp_nvs_channel_state_restore(supla_channel_t *ch, void *nvs_config, size_t len)
 {
     CHECK_ARG(ch);
     CHECK_ARG(nvs_config);
@@ -175,7 +185,7 @@ esp_err_t supla_esp_nvs_channel_config_restore(supla_channel_t *ch, void *nvs_co
     return ESP_OK;
 }
 
-esp_err_t supla_esp_nvs_config_erase(void)
+esp_err_t supla_esp_nvs_data_erase(void)
 {
     nvs_handle nvs;
     esp_err_t rc;
@@ -236,7 +246,7 @@ esp_err_t supla_esp_get_wifi_state(supla_dev_t *dev, TDSC_ChannelState *state)
         state->Fields |= SUPLA_CHANNELSTATE_FIELD_IPV4;
         state->IPv4 = ip_info.ip.addr;
     }
-#elif CONFIG_IDF_TARGET_ESP32
+#else //ESP32xx
     esp_netif_ip_info_t ip_info = {};
     esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
     if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK) {
@@ -388,6 +398,7 @@ static esp_err_t supla_dev_post_config(supla_dev_t *dev, httpd_req_t *req)
 
         config.ssl = 0;
 #ifdef CONFIG_ESP_LIBSUPLA_USE_ESP_TLS
+        config.ssl = false;
         if (httpd_query_key_value(req_data, "ssl", value, sizeof(value)) == ESP_OK)
             config.ssl = !strcmp("on", value);
 #endif
@@ -415,7 +426,7 @@ static esp_err_t supla_dev_erase_config(supla_dev_t *dev)
     struct supla_config config = { 0 };
     int rc;
 
-    rc = supla_esp_nvs_config_erase();
+    rc = supla_esp_nvs_data_erase();
     if (rc != ESP_OK)
         return rc;
 

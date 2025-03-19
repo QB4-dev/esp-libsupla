@@ -31,34 +31,34 @@ esp_err_t supla_esp_nvs_config_init(struct supla_config *supla_conf);
 esp_err_t supla_esp_nvs_config_write(struct supla_config *supla_conf);
 
 /**
- * @brief Write SUPLA channel config to NVS memory
+ * @brief Write SUPLA channel state to NVS memory
  *
  * @param[in] ch SUPLA channel
- * @param[in] nvs_config SUPLA channel config
- * @param[in] len SUPLA channelconfig size
+ * @param[in] nvs_state SUPLA channel data
+ * @param[in] len SUPLA nvs_state size
  * @return
  *     - ESP_OK success
  */
-esp_err_t supla_esp_nvs_channel_config_store(supla_channel_t *ch, void *nvs_config, size_t len);
+esp_err_t supla_esp_nvs_channel_state_store(supla_channel_t *ch, void *nvs_state, size_t len);
 
 /**
- * @brief Read SUPLA channel config from NVS memory
+ * @brief Read SUPLA channel state from NVS memory
  *
  * @param[in] ch SUPLA channel
- * @param[out] nvs_config SUPLA channel config
- * @param[in] len SUPLA channelconfig size
+ * @param[out] nvs_state SUPLA channel data
+ * @param[in] len SUPLA nvs_state size
  * @return
  *     - ESP_OK success
  */
-esp_err_t supla_esp_nvs_channel_config_restore(supla_channel_t *ch, void *nvs_config, size_t len);
+esp_err_t supla_esp_nvs_channel_state_restore(supla_channel_t *ch, void *nvs_state, size_t len);
 
 /**
- * @brief Erase SUPLA config from NVS memory
+ * @brief Erase SUPLA data from NVS memory
  *
  * @return
  *     - ESP_OK success
  */
-esp_err_t supla_esp_nvs_config_erase(void);
+esp_err_t supla_esp_nvs_data_erase(void);
 
 /**
  * @brief generate SUPLA device hostname from device name and last two bytes

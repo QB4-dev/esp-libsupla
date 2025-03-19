@@ -22,7 +22,7 @@
 #if CONFIG_IDF_TARGET_ESP8266
 #define PUSH_BUTTON_PIN GPIO_NUM_0
 #define LED_PIN GPIO_NUM_2
-#elif CONFIG_IDF_TARGET_ESP32
+#else //ESP32xx
 #define PUSH_BUTTON_PIN GPIO_NUM_0
 #define LED_PIN GPIO_NUM_27
 #endif
@@ -125,11 +125,33 @@ void app_main()
 
     io_init();
     wifi_init();
-#if CONFIG_IDF_TARGET_ESP8266
+
+#if defined(CONFIG_IDF_TARGET_ESP8266)
     supla_dev = supla_dev_create("ESP8266", NULL);
-#elif CONFIG_IDF_TARGET_ESP32
+#elif defined(CONFIG_IDF_TARGET_ESP32)
     supla_dev = supla_dev_create("ESP32", NULL);
+#elif defined(CONFIG_IDF_TARGET_ESP32S2)
+    supla_dev = supla_dev_create("ESP32S2", NULL);
+#elif defined(CONFIG_IDF_TARGET_ESP32S3)
+    supla_dev = supla_dev_create("ESP32S3", NULL);
+#elif defined(CONFIG_IDF_TARGET_ESP32C2)
+    supla_dev = supla_dev_create("ESP32C2", NULL);
+#elif defined(CONFIG_IDF_TARGET_ESP32C3)
+    supla_dev = supla_dev_create("ESP32C3", NULL);
+#elif defined(CONFIG_IDF_TARGET_ESP32C5)
+    supla_dev = supla_dev_create("ESP32C5", NULL);
+#elif defined(CONFIG_IDF_TARGET_ESP32C6)
+    supla_dev = supla_dev_create("ESP32C6", NULL);
+#elif defined(CONFIG_IDF_TARGET_ESP32C61)
+    supla_dev = supla_dev_create("ESP32C61", NULL);
+#elif defined(CONFIG_IDF_TARGET_ESP32P4)
+    supla_dev = supla_dev_create("ESP32P4", NULL);
+#elif defined(CONFIG_IDF_TARGET_ESP32H2)
+    supla_dev = supla_dev_create("ESP32H2", NULL);
+#else
+    supla_dev = supla_dev_create("ESPXX", NULL);
 #endif
+
     wifi_init_sta();
     xTaskCreate(&io_task, "io", 2048, NULL, 1, NULL);
     xTaskCreate(&supla_task, "supla", 8192, supla_dev, 1, NULL);
