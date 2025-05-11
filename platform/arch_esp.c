@@ -132,10 +132,8 @@ int supla_cloud_connect(supla_link_t *link, const char *host, int port, unsigned
 
     link_data_t *ssd = calloc(1, sizeof(link_data_t));
     if (ssd) {
-        *link = ssd;
         ssd->sfd = -1;
     } else {
-        *link = NULL;
         return SUPLA_RESULT_FALSE;
     }
 
@@ -174,10 +172,12 @@ int supla_cloud_connect(supla_link_t *link, const char *host, int port, unsigned
         rc = connect(ssd->sfd, rp->ai_addr, rp->ai_addrlen);
         if (rc != -1) {
             freeaddrinfo(result);
+            *link = ssd;
             return SUPLA_RESULT_TRUE;
         } else {
             if (errno == EINPROGRESS) {
                 freeaddrinfo(result);
+                *link = ssd;
                 return SUPLA_RESULT_TRUE;
             } else {
                 close(ssd->sfd);
@@ -192,12 +192,16 @@ int supla_cloud_connect(supla_link_t *link, const char *host, int port, unsigned
 int supla_cloud_send(supla_link_t link, void *buf, int count)
 {
     link_data_t *ssd = link;
+    if (!link)
+        return -1;
     return send(ssd->sfd, buf, count, MSG_NOSIGNAL);
 }
 
 int supla_cloud_recv(supla_link_t link, void *buf, int count)
 {
     link_data_t *ssd = link;
+    if (!link)
+        return -1;
     return recv(ssd->sfd, buf, count, MSG_DONTWAIT);
 }
 
