@@ -219,6 +219,7 @@ int supla_cloud_disconnect(supla_link_t *link)
         close(ssd->sfd);
     }
     free(ssd);
+    ssd = NULL;
     return 0;
 }
 
