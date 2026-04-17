@@ -9,6 +9,7 @@
 
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <fcntl.h>
 #include <esp_log.h>
 
 #ifdef CONFIG_ESP_LIBSUPLA_USE_ESP_TLS
@@ -30,9 +31,14 @@ void esp_tls_get_error_handle(esp_tls_t *client, esp_tls_error_handle_t *errorHa
 
 extern const uint8_t server_cert_pem_start[] asm("_binary_supla_org_cert_pem_start");
 extern const uint8_t server_cert_pem_end[] asm("_binary_supla_org_cert_pem_end");
+
+typedef struct {
+    struct esp_tls *tls;
+    int sockfd;
+} tls_link_t;
 #endif
 
-static const char *TAG = "SUPLA";
+static const char *TAG = "SUPLA-LINK";
 
 uint64_t supla_time_getmonotonictime_milliseconds(void)
 {
@@ -43,74 +49,179 @@ uint64_t supla_time_getmonotonictime_milliseconds(void)
 
 #ifdef CONFIG_ESP_LIBSUPLA_USE_ESP_TLS
 
+static void set_keepalive(int sockfd)
+{
+    int keepalive = 1;
+    int idle = 60;
+    int interval = 10;
+    int count = 3;
+
+    setsockopt(sockfd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive));
+    setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle));
+    setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPINTVL, &interval, sizeof(interval));
+    setsockopt(sockfd, IPPROTO_TCP, TCP_KEEPCNT, &count, sizeof(count));
+}
+
 int supla_cloud_connect(supla_link_t *link, const char *host, int port, unsigned char ssl)
 {
-    esp_tls_cfg_t cfg = {
-        .cacert_pem_buf = server_cert_pem_start,
-        .cacert_pem_bytes = server_cert_pem_end - server_cert_pem_start,
-        .non_block = true,
-        .timeout_ms = 10000 //
-    };
-
-    esp_tls_error_handle_t esp_tls_errh;
-    int sockfd = 0;
-    struct esp_tls *tls = esp_tls_init();
-
-    if (tls != NULL) {
-        *link = tls;
-    } else {
-        *link = NULL;
+    if (!link || !host)
         return SUPLA_RESULT_FALSE;
+
+    tls_link_t *ctx = calloc(1, sizeof(tls_link_t));
+    if (!ctx)
+        return SUPLA_RESULT_FALSE;
+
+    ctx->sockfd = -1;
+    if (ssl) {
+        ctx->tls = esp_tls_init();
+        if (!ctx->tls) {
+            free(ctx);
+            return SUPLA_RESULT_FALSE;
+        }
+
+        esp_tls_cfg_t cfg = { 0 };
+        cfg.cacert_buf = server_cert_pem_start;
+        cfg.cacert_bytes = server_cert_pem_end - server_cert_pem_start;
+        cfg.non_block = false;
+        cfg.timeout_ms = 10000;
+
+        int rc = esp_tls_conn_new_sync(host, strlen(host), port, &cfg, ctx->tls);
+        if (rc != 1) {
+            ESP_LOGE(TAG, "Connection failed: %s:%d (ssl=%d)", host, port, ssl);
+            esp_tls_conn_destroy(ctx->tls);
+            free(ctx);
+            return SUPLA_RESULT_FALSE;
+        }
+
+        if (esp_tls_get_conn_sockfd(ctx->tls, &ctx->sockfd) == ESP_OK && ctx->sockfd >= 0)
+            fcntl(ctx->sockfd, F_SETFL, O_NONBLOCK);
+
+        if (ctx->sockfd >= 0)
+            set_keepalive(ctx->sockfd);
+    } else {
+        struct addrinfo hints;
+        struct addrinfo *result, *rp = NULL;
+
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_flags = AI_NUMERICSERV;
+
+        int rc = getaddrinfo(host, NULL, &hints, &result);
+        if (rc != 0) {
+            free(ctx);
+            return SUPLA_RESULT_FALSE;
+        }
+
+        for (rp = result; rp != NULL; rp = rp->ai_next) {
+            ctx->sockfd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+            if (ctx->sockfd == -1)
+                continue;
+
+            switch (rp->ai_family) {
+#if LWIP_IPV6
+            case AF_INET6:
+                ((struct sockaddr_in6 *)(rp->ai_addr))->sin6_port = htons(port);
+                break;
+#endif
+            case AF_INET:
+                ((struct sockaddr_in *)(rp->ai_addr))->sin_port = htons(port);
+                break;
+            default:
+                close(ctx->sockfd);
+                ctx->sockfd = -1;
+                continue;
+            }
+
+            rc = connect(ctx->sockfd, rp->ai_addr, rp->ai_addrlen);
+            if (rc != -1 || errno == EINPROGRESS) {
+                fcntl(ctx->sockfd, F_SETFL, O_NONBLOCK);
+                set_keepalive(ctx->sockfd);
+                break;
+            }
+
+            close(ctx->sockfd);
+            ctx->sockfd = -1;
+        }
+
+        freeaddrinfo(result);
+
+        if (ctx->sockfd == -1) {
+            free(ctx);
+            return SUPLA_RESULT_FALSE;
+        }
     }
 
-    int rc = esp_tls_conn_new_sync(host, strlen(host), port, ssl ? &cfg : NULL, tls);
-    if (rc == 1) {
-        if (esp_tls_get_conn_sockfd(tls, &sockfd) == ESP_OK)
-            fcntl(sockfd, F_SETFL, O_NONBLOCK);
-
-        return SUPLA_RESULT_TRUE;
-    } else {
-        esp_tls_get_error_handle(tls, &esp_tls_errh);
-
-        ESP_LOGE(TAG, "esp_tls_conn_new_sync failed. Last errors: 0x%x 0x%x 0x%x",
-                 esp_tls_errh->last_error, esp_tls_errh->esp_tls_error_code,
-                 esp_tls_errh->esp_tls_flags);
-        return SUPLA_RESULT_FALSE;
-    }
+    *link = (supla_link_t)ctx;
+    return SUPLA_RESULT_TRUE;
 }
 
 int supla_cloud_send(supla_link_t link, void *buf, int count)
 {
-    return esp_tls_conn_write(link, buf, count);
+    if (!link || !buf || count <= 0)
+        return SUPLA_RESULT_FALSE;
+
+    tls_link_t *ctx = (tls_link_t *)link;
+
+    if (ctx->tls) {
+        int ret = esp_tls_conn_write(ctx->tls, (const unsigned char *)buf, count);
+        if (ret == ESP_TLS_ERR_SSL_WANT_READ || ret == ESP_TLS_ERR_SSL_WANT_WRITE)
+            return -1;
+
+        if (ret == 0)
+            return SUPLA_RESULT_FALSE;
+
+        return ret;
+    }
+
+    return send(ctx->sockfd, buf, count, MSG_NOSIGNAL);
 }
 
 int supla_cloud_recv(supla_link_t link, void *buf, int count)
 {
-    int rc = 0;
-    do {
-        rc = esp_tls_conn_read(link, buf, count);
-        if (rc == ESP_TLS_ERR_SSL_WANT_READ || rc == ESP_TLS_ERR_SSL_WANT_WRITE) {
-            vTaskDelay(100);
-            continue;
+    if (!link || !buf || count <= 0)
+        return SUPLA_RESULT_FALSE;
+
+    tls_link_t *ctx = (tls_link_t *)link;
+
+    if (ctx->tls) {
+        int ret = esp_tls_conn_read(ctx->tls, buf, count);
+        if (ret == ESP_TLS_ERR_SSL_WANT_READ || ret == ESP_TLS_ERR_SSL_WANT_WRITE)
+            return -1;
+
+        if (ret < 0) {
+            ESP_LOGE(TAG, "Read error: %d", ret);
+            return -1;
         }
-        if (rc < 0) {
-            ESP_LOGE(TAG, "esp_tls_conn_read  returned -0x%x", -rc);
-            rc = 0;
-            break;
-        }
-        if (rc == 0) {
-            ESP_LOGE(TAG, "connection closed");
-            return 0;
-        }
-        break;
-    } while (1);
-    return rc;
+
+        if (ret == 0)
+            ESP_LOGW(TAG, "Connection closed by peer");
+
+        return ret;
+    }
+
+    return recv(ctx->sockfd, buf, count, MSG_DONTWAIT);
 }
 
 int supla_cloud_disconnect(supla_link_t *link)
 {
-    esp_tls_conn_destroy(*link);
-    return 0;
+    if (!link || !*link)
+        return SUPLA_RESULT_FALSE;
+
+    tls_link_t *ctx = (tls_link_t *)(*link);
+
+    if (ctx->tls) {
+        esp_tls_conn_destroy(ctx->tls);
+    } else if (ctx->sockfd != -1) {
+        shutdown(ctx->sockfd, SHUT_RDWR);
+        close(ctx->sockfd);
+    }
+
+    free(ctx);
+    *link = NULL;
+
+    ESP_LOGI(TAG, "Disconnected");
+    return SUPLA_RESULT_TRUE;
 }
 
 #else
