@@ -121,6 +121,7 @@ int supla_cloud_connect(supla_link_t *link, const char *host, int port, unsigned
     ctx->sockfd = -1;
     ctx->is_tls = ssl;
 
+    ESP_LOGI(TAG, "Connecting to %s:%d (SSL: %s)", host, port, ssl ? "on" : "off");
 #ifdef CONFIG_ESP_LIBSUPLA_USE_ESP_TLS
     if (ssl) {
         ctx->tls = esp_tls_init();
