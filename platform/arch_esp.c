@@ -35,6 +35,7 @@ void esp_tls_get_error_handle(esp_tls_t *client, esp_tls_error_handle_t *errorHa
 
 extern const uint8_t server_cert_pem_start[] asm("_binary_supla_org_cert_pem_start");
 extern const uint8_t server_cert_pem_end[] asm("_binary_supla_org_cert_pem_end");
+#endif
 
 typedef struct {
     int sockfd;
@@ -43,7 +44,6 @@ typedef struct {
     struct esp_tls *tls;
 #endif
 } link_ctx_t;
-#endif
 
 static const char *TAG = "SUPLA-LINK";
 
