@@ -45,8 +45,6 @@ typedef struct {
 #endif
 } link_ctx_t;
 
-static const char *TAG = "SUPLA-LINK";
-
 uint64_t supla_time_getmonotonictime_milliseconds(void)
 {
     struct timespec current_time;
