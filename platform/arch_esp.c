@@ -135,7 +135,6 @@ int supla_cloud_connect(supla_link_t *link, const char *host, int port, unsigned
 
         int rc = esp_tls_conn_new_sync(host, strlen(host), port, &cfg, ctx->tls);
         if (rc != 1) {
-            ESP_LOGE(TAG, "TLS connect failed: %s:%d", host, port);
             esp_tls_conn_destroy(ctx->tls);
             free(ctx);
             return SUPLA_RESULT_FALSE;
