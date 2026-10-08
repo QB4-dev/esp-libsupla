@@ -10,6 +10,7 @@ set(srcs "libsupla/src/supla-common/lck.c"
          "libsupla/src/supla-action-trigger.c"
          "platform/arch_esp.c"
          "esp-supla/esp-supla.c"
+         "esp-supla/esp-supla-httpd.c"
 )
 set(requires "esp_http_server" "nvs_flash" "json" "esp_netif" "esp_wifi" "esp-tls")
 

@@ -17,6 +17,10 @@
 #include <esp_netif.h>
 #include <esp_wifi.h>
 
+#ifndef CONFIG_IDF_TARGET_ESP8266
+#include <esp_mac.h>
+#endif
+
 static const char *TAG = "ESP-SUPLA";
 
 #define CHECK_ARG(VAL)                  \
@@ -37,7 +41,7 @@ static char *btox(char *hex, const char *bb, int len)
 static int urldecode(char *out, const char *in)
 
 {
-    const char tab[256] = {
+    const signed char tab[256] = {
         -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
         -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
         -1, -1, -1, -1, 0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  -1, -1, -1, -1, -1, -1, -1, 10,
@@ -51,7 +55,8 @@ static int urldecode(char *out, const char *in)
         -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
         -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
     };
-    char c, v1, v2, *beg = out;
+    char c, *beg = out;
+    signed char v1, v2;
     if (in != NULL) {
         while ((c = *in++) != '\0') {
             if (c == '%') {
