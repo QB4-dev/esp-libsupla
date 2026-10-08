@@ -207,8 +207,8 @@ static esp_err_t handle_post_req(supla_dev_t *dev, httpd_req_t *req, bool *reboo
     char *req_data;
     char *url_encoded;
     char value[128];
-    struct supla_config config;
     wifi_config_t wifi_config = {};
+    struct supla_config config;
     int bytes_recv = 0;
     int rc;
 
@@ -233,7 +233,6 @@ static esp_err_t handle_post_req(supla_dev_t *dev, httpd_req_t *req, bool *reboo
         }
 
         urldecode(req_data, url_encoded);
-        ESP_LOGW(TAG, "post req:%s", req_data);
         if (httpd_query_key_value(req_data, "sid", value, sizeof(value)) == ESP_OK) {
             strncpy((char *)wifi_config.sta.ssid, value, sizeof(wifi_config.sta.ssid));
         }
@@ -264,10 +263,8 @@ static esp_err_t handle_post_req(supla_dev_t *dev, httpd_req_t *req, bool *reboo
     rc = esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config);
     if (rc == 0) {
         ESP_LOGI(TAG, "wifi config OK");
-        return ESP_OK;
     } else {
         ESP_LOGE(TAG, "wifi config ERR:%s(%d)", esp_err_to_name(rc), rc);
-        return rc;
     }
 
     rc = supla_esp_nvs_config_write(&config);
@@ -275,11 +272,10 @@ static esp_err_t handle_post_req(supla_dev_t *dev, httpd_req_t *req, bool *reboo
         ESP_LOGI(TAG, "nvs write OK");
         supla_dev_stop(dev);
         supla_dev_set_config(dev, &config);
-        return ESP_OK;
     } else {
         ESP_LOGE(TAG, "nvs write ERR:%s(%d)", esp_err_to_name(rc), rc);
-        return rc;
     }
+    return rc;
 }
 
 esp_err_t supla_dev_basic_httpd_handler(httpd_req_t *req)
