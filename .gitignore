@@ -1,0 +1,3 @@
+examples/*/build
+examples/*/sdkconfig
+examples/*/sdkconfig.old
