@@ -3,7 +3,7 @@ dependencies:
 description: SUPLA IoT component for ESP-IDF/ESP8266_RTOS_SDK
 documentation: https://github.com/QB4-dev/esp-libsupla/blob/master/README.md
 issues: https://github.com/QB4-dev/esp-libsupla/issues
-license: license: GPL-2.0
+license: GPL-2.0
 repository: https://github.com/QB4-dev/esp-libsupla
 tags:
 - supla
