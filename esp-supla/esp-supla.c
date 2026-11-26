@@ -7,6 +7,7 @@
 #include "../include/esp-supla.h"
 
 #include <time.h>
+#include <stdbool.h>
 #include <string.h>
 #include <sys/param.h>
 
@@ -139,26 +140,40 @@ esp_err_t supla_esp_nvs_channel_state_store(supla_channel_t *ch, void *nvs_confi
     esp_err_t rc;
     void *stored;
     size_t stored_len;
+    bool should_store = false;
     int ch_num = supla_channel_get_assigned_number(ch);
 
-    stored = malloc(len);
+    if (len == 0)
+        return ESP_ERR_INVALID_SIZE;
+
+    stored = calloc(1, len);
     if (!stored)
         return ESP_ERR_NO_MEM;
 
     snprintf(nvs_key, sizeof(nvs_key), "ch%02d", ch_num);
     rc = nvs_open(NVS_STORAGE, NVS_READWRITE, &nvs);
     if (rc == ESP_OK) {
-        //compare data and store if different
-        nvs_get_blob(nvs, nvs_key, stored, &stored_len);
-        if (memcmp(nvs_config, stored, len) != 0) {
-            nvs_set_blob(nvs, nvs_key, nvs_config, len);
-            nvs_commit(nvs);
-            ESP_LOGI(TAG, "ch[%d] config stored to NVS", ch_num);
+        stored_len = len;
+        rc = nvs_get_blob(nvs, nvs_key, stored, &stored_len);
+        if (rc == ESP_ERR_NVS_NOT_FOUND || rc == ESP_ERR_NVS_INVALID_LENGTH) {
+            should_store = true;
+            rc = ESP_OK;
+        } else if (rc == ESP_OK) {
+            should_store = stored_len != len || memcmp(nvs_config, stored, len) != 0;
         }
+
+        if (rc == ESP_OK && should_store)
+            rc = nvs_set_blob(nvs, nvs_key, nvs_config, len);
+        if (rc == ESP_OK && should_store)
+            rc = nvs_commit(nvs);
+        if (rc == ESP_OK && should_store)
+            ESP_LOGI(TAG, "ch[%d] config stored to NVS", ch_num);
         nvs_close(nvs);
     } else {
         supla_log(LOG_ERR, "nvs open error %s", esp_err_to_name(rc));
     }
+    if (rc != ESP_OK)
+        ESP_LOGE(TAG, "ch[%d] failed to store NVS state: %s", ch_num, esp_err_to_name(rc));
     free(stored);
     return rc;
 }
@@ -170,19 +185,28 @@ esp_err_t supla_esp_nvs_channel_state_restore(supla_channel_t *ch, void *nvs_con
     nvs_handle nvs;
     char nvs_key[8];
     esp_err_t rc;
+    size_t stored_len = len;
     int ch_num = supla_channel_get_assigned_number(ch);
+
+    if (len == 0)
+        return ESP_ERR_INVALID_SIZE;
 
     snprintf(nvs_key, sizeof(nvs_key), "ch%02d", ch_num);
     rc = nvs_open(NVS_STORAGE, NVS_READONLY, &nvs);
     if (rc == ESP_OK) {
-        nvs_get_blob(nvs, nvs_key, nvs_config, &len);
+        rc = nvs_get_blob(nvs, nvs_key, nvs_config, &stored_len);
+        if (rc == ESP_OK && stored_len != len)
+            rc = ESP_ERR_INVALID_SIZE;
         nvs_close(nvs);
     } else {
         supla_log(LOG_ERR, "nvs open error %s", esp_err_to_name(rc));
         return rc;
     }
-    ESP_LOGI(TAG, "ch[%d] config restored from NVS", ch_num);
-    return ESP_OK;
+    if (rc == ESP_OK)
+        ESP_LOGI(TAG, "ch[%d] config restored from NVS", ch_num);
+    else if (rc != ESP_ERR_NVS_NOT_FOUND)
+        ESP_LOGE(TAG, "ch[%d] failed to restore NVS state: %s", ch_num, esp_err_to_name(rc));
+    return rc;
 }
 
 esp_err_t supla_esp_nvs_data_erase(void)

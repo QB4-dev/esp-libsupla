@@ -38,6 +38,7 @@ esp_err_t supla_esp_nvs_config_write(struct supla_config *supla_conf);
  * @param[in] len SUPLA nvs_state size
  * @return
  *     - ESP_OK success
+ *     - an ESP/NVS error if the state could not be stored
  */
 esp_err_t supla_esp_nvs_channel_state_store(supla_channel_t *ch, void *nvs_state, size_t len);
 
@@ -49,6 +50,9 @@ esp_err_t supla_esp_nvs_channel_state_store(supla_channel_t *ch, void *nvs_state
  * @param[in] len SUPLA nvs_state size
  * @return
  *     - ESP_OK success
+ *     - ESP_ERR_NVS_NOT_FOUND if no state exists for the channel
+ *     - ESP_ERR_INVALID_SIZE if the stored state has a different size
+ *     - an ESP/NVS error if the state could not be read
  */
 esp_err_t supla_esp_nvs_channel_state_restore(supla_channel_t *ch, void *nvs_state, size_t len);
 
